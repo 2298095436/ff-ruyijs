@@ -12,5 +12,6 @@ std::string StyleSourceTitle(const std::string&);
 bool ReadLinkStyleSource(State&, NodeKey, NodeKey, const NodeSnapshot&, StyleSheetSource*);
 // The URL of the document that owns `node` (the base of its link hrefs).
 bool StyleDocumentURL(State&, NodeKey node, std::string* out);
+bool StyleDocumentBaseURL(State&, NodeKey node, std::string* out);
 bool NotifyLinkStyle(State&, NodeKey);
 }

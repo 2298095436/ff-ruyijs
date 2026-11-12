@@ -28,7 +28,7 @@ bool CurrentRules(State& state,const SheetCache& cache,
     *initialized=true;
   }
   if(!ruyijs::domain::styling::CssMediaCondition(cache.media.text(),*environment)) return true;
-  out->emplace_back(cache.key?cache.key:1,cache.href);
+  out->emplace_back(cache.key?cache.key:1,cache.external?cache.href:cache.baseURL);
   out->back().append_rule_values(cache.rules,*environment);
   return true;
 }
@@ -107,6 +107,7 @@ bool ReadCascadeSources(State& caller, JS::HandleObject element,
         Mix(&hash, &flags, 1);
         Mix(&hash, &cache.key, sizeof cache.key);
         Mix(&hash, cache.href);
+        Mix(&hash, cache.baseURL);
         Mix(&hash, cache.media.text());
         MixRules(&hash, cache.rules);
         if (!cache.disabled && !cache.rules.empty() && !media)

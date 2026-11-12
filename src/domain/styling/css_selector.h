@@ -13,7 +13,7 @@ struct ElementRelations {
   virtual const ElementNode* Related(const ElementNode&,char) const=0;
 };
 struct ElementNode {
-  std::string tag,id,inline_style;
+  std::string tag,id,inline_style,baseURL;
   std::vector<std::string> classes;
   std::map<std::string,std::string> attributes;
   const ElementNode* parent=nullptr;

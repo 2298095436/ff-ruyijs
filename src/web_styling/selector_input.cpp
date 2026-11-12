@@ -11,6 +11,7 @@ const ruyijs::domain::styling::ElementNode* SelectorInput::Load(uint64_t documen
   Entry entry;auto& node=entry.node;
   node.document=frame.identity.document;node.key=frame.identity.key;node.relations=this;
   node.tag=std::move(frame.value.tag);node.id=std::move(frame.value.id);
+  node.baseURL=std::move(frame.value.baseURL);
   node.inline_style=std::move(frame.value.inline_style);node.classes=std::move(frame.value.classes);
   for(auto& attr:frame.value.attributes) node.attributes.emplace(std::move(attr.first),std::move(attr.second));
   frame.value={};node.root=frame.root;node.empty=frame.empty;node.html=frame.html;node.focused=frame.focused;

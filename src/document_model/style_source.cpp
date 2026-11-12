@@ -40,6 +40,7 @@ bool CollectSources(State& state, NodeKey scope, std::vector<StyleSheetSource>* 
     source.document = key.document;source.key = key.node;
     source.scopeDocument = scope.document;source.scopeNode = scope.node;
     source.mainDocument = Same(scope, state.main);
+    if (!StyleDocumentBaseURL(state,key,&source.baseURL)) return false;
     source.text = StyleSourceText(text ? DomStringView(*text) : DomStringView());
     source.titleAttribute = StyleSourceText(title ? DomStringView(*title) : DomStringView());
     source.typeAttribute = StyleSourceText(type ? DomStringView(*type) : DomStringView());
@@ -87,6 +88,7 @@ bool Realm::ReadStyleChain(JS::HandleObject element, std::vector<StyleFrame>* ch
     NodeSnapshot node;
     if (!state.Check(state.model.Inspect(current, &node))) return false;
     StyleFrame frame;
+    if (!StyleDocumentBaseURL(state,current,&frame.baseURL)) return false;
     frame.tag = StyleSourceText(node.local_name ? DomStringView(*node.local_name)
                                      : DomStringView(node.node_name));
     std::vector<AttributeSnapshot> attributes;

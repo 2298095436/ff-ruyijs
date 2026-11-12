@@ -21,6 +21,7 @@ struct StyleFrame {
   std::vector<std::string> classes;
   std::vector<std::pair<std::string, std::string>> attributes;
   std::string inline_style;
+  std::string baseURL;
 };
 struct StyleIdentity {uint64_t document=0,key=0;};
 struct StyleRelationFrame {
@@ -37,7 +38,7 @@ struct StyleSheetSource {
   uint64_t document = 0;
   uint64_t key = 0;
   uint64_t scopeDocument = 0, scopeNode = 0;
-  std::string href, documentURL, origin, resourceOrigin;
+  std::string href, documentURL, origin, resourceOrigin, baseURL;
   std::string text;
   std::string title, media, titleAttribute, typeAttribute;
   std::string rel, crossOrigin;

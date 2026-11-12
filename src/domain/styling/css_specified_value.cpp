@@ -11,6 +11,7 @@
 //                column; TransformOrigin (all three components)
 #include "domain/styling/css_specified_value.h"
 #include "domain/styling/css_color_value.h"
+#include "domain/styling/css_background_value.h"
 #include "domain/styling/css_float_text.h"
 #include <algorithm>
 #include <cctype>
@@ -643,6 +644,7 @@ std::string CssSpecifiedValue(std::string_view name, std::string_view value) {
   if (name == "stroke-dasharray") return DashArray(value);
   if (name == "filter" || name == "backdrop-filter") return Filter(value);
   if (name == "background") return Background(value);
+  if (name == "background-image") return CssBackgroundSpecifiedImage(Generic(value, {}));
   if (name == "opacity" || name == "fill-opacity" || name == "stroke-opacity" ||
       name == "flood-opacity" || name == "stop-opacity") {
     // <opacity-value>: a percentage is stored as the number it stands for.

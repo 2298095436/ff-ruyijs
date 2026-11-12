@@ -12,6 +12,7 @@
 #include "domain/styling/css_selector.h"
 #include "domain/styling/css_font_value.h"
 #include "domain/styling/css_box_value.h"
+#include "domain/styling/css_background_value.h"
 #include "domain/styling/css_variables.h"
 #include "domain/styling/css_overflow_value.h"
 
@@ -599,6 +600,7 @@ public:
                         CssProperty prop{physical_name, physical_value, authored.important};
                         Candidate candidate;
                         candidate.value = prop.value;
+                        candidate.background_base = sheet->href();
                         if (authored.name == "background" || authored.name == "background-position")
                           candidate.pending_background = authored.name;
                         candidate.important = prop.important;
@@ -624,6 +626,7 @@ public:
                 for (const auto& [physical_name, physical_value] : physical) {
                     Candidate candidate;
                     candidate.value = physical_value;
+                    candidate.background_base = element.baseURL;
                     if (entry.name == "background" || entry.name == "background-position")
                       candidate.pending_background = entry.name;
                     candidate.important = entry.important;
@@ -696,6 +699,10 @@ public:
                             {[](const std::string& name) { return is_inherited(name); },
                              [](const std::string& name) { return initial_value(name); },
                              has_parent ? &parent_style : nullptr, pending_backgrounds});
+        if (result.has_property("background-image") && winners.count("background-image"))
+          result.set_property("background-image",CssBackgroundResolveURLs(
+            result.get_property_value("background-image"),winners.at("background-image").background_base),
+            result.get_property_priority("background-image"));
         CssComputeFont(result, parent_style, parent_style.root_font_size);
         result.root_font_size = has_parent ? parent_style.root_font_size : result.computed_font_size;
         unsigned side_index = 0;
@@ -844,6 +851,7 @@ private:
     struct Candidate {
         std::string value;
         std::string pending_background;
+        std::string background_base;
         bool important = false;
         bool inline_origin = false;
         int a = 0, b = 0, c = 0;

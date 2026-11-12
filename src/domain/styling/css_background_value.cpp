@@ -4,6 +4,8 @@
 #include "domain/styling/css_color_value.h"
 #include "domain/styling/css_numeric_value.h"
 #include "domain/styling/css_specified_value.h"
+#include "domain/styling/css_float_text.h"
+#include "domain/browser_environment/url_value.h"
 #include <algorithm>
 #include <array>
 
@@ -13,7 +15,7 @@ constexpr const char* names[] = {"background-image", "background-position-x", "b
   "background-size", "background-repeat", "background-attachment", "background-origin",
   "background-clip", "background-color"};
 constexpr const char* initial[] = {"none", "0%", "0%", "auto", "repeat", "scroll",
-  "padding-box", "border-box", "transparent"};
+  "padding-box", "border-box", "rgba(0, 0, 0, 0)"};
 bool Word(const std::string& value, const char* words) {
   for (const auto& word : CssSplit(words, ',')) if (value == word) return true;
   return false;
@@ -270,6 +272,74 @@ bool CssBackgroundImage(const std::string& input) {
   const auto layers=CssSplit(background_value::Clean(input),',');
   return !layers.empty() && std::all_of(layers.begin(),layers.end(),background_value::Image);
 }
+std::string CssBackgroundResolveURLs(const std::string& input,const std::string& base) {
+  std::string result;
+  for (size_t i=0;i<input.size();) {
+    if (CssLower(input.substr(i,4))!="url(") {
+      if(input[i]=='"' || input[i]=='\'') {
+        const auto quote=input[i];result+=input[i++];
+        while(i<input.size()) { const auto c=input[i++];result+=c;
+          if(c=='\\' && i<input.size()) result+=input[i++];else if(c==quote) break; }
+      } else result+=input[i++];
+      continue;
+    }
+    const auto end=CssClosing(input,i+3);
+    if(end==input.size()) return input;
+    auto body=CssTrim(input.substr(i+4,end-i-4));
+    if(body.size()>=2 && (body[0]=='"'||body[0]=='\'')) body=body.substr(1,body.size()-2);
+    std::string decoded;
+    for(size_t j=0;j<body.size();++j) {
+      if(body[j]!='\\') {decoded+=body[j];continue;}
+      if(++j==body.size()) break;
+      unsigned code=0,count=0;
+      const auto hex=[](char c)->int {return c>='0'&&c<='9'?c-'0':c>='a'&&c<='f'?c-'a'+10:c>='A'&&c<='F'?c-'A'+10:-1;};
+      while(j<body.size()&&count<6&&hex(body[j])>=0) {code=code*16+hex(body[j++]);++count;}
+      if(!count) {if(body[j]!='\n'&&body[j]!='\r') decoded+=body[j];continue;}
+      if(j<body.size()&&CssSpace(body[j])) {if(body[j]=='\r'&&j+1<body.size()&&body[j+1]=='\n') ++j;}
+      else --j;
+      if(!code||code>0x10ffff||(code>=0xd800&&code<=0xdfff)) code=0xfffd;
+      if(code<0x80) decoded+=char(code);
+      else if(code<0x800) {decoded+=char(0xc0|(code>>6));decoded+=char(0x80|(code&63));}
+      else if(code<0x10000) {decoded+=char(0xe0|(code>>12));decoded+=char(0x80|((code>>6)&63));decoded+=char(0x80|(code&63));}
+      else {decoded+=char(0xf0|(code>>18));decoded+=char(0x80|((code>>12)&63));decoded+=char(0x80|((code>>6)&63));decoded+=char(0x80|(code&63));}
+    }
+    ruyijs::domain::browser_environment::UrlValue url;
+    std::string resolved=ruyijs::domain::browser_environment::UrlValue::Resolve(decoded,base,&url)?url.href():"about:invalid";
+    result+="url(\"";
+    for(char c:resolved) {if(c=='"'||c=='\\') result+='\\';result+=c;}
+    result+="\")";i=end+1;
+  }
+  return result;
+}
+std::string CssBackgroundSpecifiedImage(const std::string& input) {
+  using namespace background_value;
+  std::string result;
+  for (const auto& part:CssSplit(input,',')) {
+    std::string value=part;
+    const auto open=value.find('(');
+    if (open!=value.npos && CssLower(value.substr(0,open)).find("gradient")!=std::string::npos) {
+      auto groups=CssSplit(value.substr(open+1,value.size()-open-2),',');
+      if (!groups.empty()) {
+        auto words=Tokens(CssLower(groups[0]));
+        const auto at=std::find(words.begin(),words.end(),"at");
+        if (at!=words.end()) {
+          std::string x,y;
+          if (Position(std::vector<std::string>(at+1,words.end()),&x,&y) &&
+              (x=="center" || x=="50%") && (y=="center" || y=="50%")) words.erase(at,words.end());
+        }
+        if (!words.empty() && !CssColorSupported(words[0])) {
+          groups[0].clear();
+          for (const auto& word:words) groups[0]+=(groups[0].empty()?"":" ")+word;
+        } else if (words.empty()) groups.erase(groups.begin());
+        value=part.substr(0,open+1);
+        for (size_t i=0;i<groups.size();++i) value+=(i?", ":"")+groups[i];
+        value+=")";
+      }
+    }
+    if (!result.empty()) result+=", ";result+=value;
+  }
+  return result;
+}
 bool CssBackgroundLonghand(const std::string& name, const std::string& input) {
   using namespace background_value;
   if (!CssBackgroundProperty(name)) return false;
@@ -410,9 +480,14 @@ std::string CssBackgroundSerialize(const std::vector<CssDeclarationValue>& rows,
   }
   return result;
 }
-std::string CssBackgroundComputed(const std::string& name,const std::string& input,const std::string& current) {
+std::string CssBackgroundComputed(const std::string& name,const std::string& input,const std::string& current,double em,double rem) {
   using namespace background_value;
-  if (name!="background-position-x" && name!="background-position-y" && name!="background-image") return input;
+  if (name!="background-position-x" && name!="background-position-y" && name!="background-size" && name!="background-image") return input;
+  const auto length=[&](const std::string& text) {
+    if (CssNumericParse(text).kind!=CssLength) return text;
+    const auto number=CssNumericResolve(text,em,rem,0);
+    return number.kind==CssLength?CssFloatText(float(number.number))+"px":text;
+  };
   std::string result;
   for (const auto& part:CssSplit(input,',')) {
     std::string value=part;
@@ -431,12 +506,35 @@ std::string CssBackgroundComputed(const std::string& name,const std::string& inp
         }
         value=part.substr(0,open+1)+args+")";
       }
+      if (open!=part.npos && Word(CssLower(part.substr(0,open)),"image-set,-webkit-image-set")) {
+        std::string args;
+        for (const auto& choice:CssSplit(part.substr(open+1,part.size()-open-2),',')) {
+          auto words=Tokens(choice);
+          bool density=false;
+          for (auto& word:words) {
+            const auto number=CssNumericParse(word);
+            if (number.kind!=CssResolution) continue;
+            const auto lower=CssLower(word);
+            const double scale=lower.ends_with("dpi")?1.0/96:lower.ends_with("dpcm")?2.54/96:1;
+            word=CssFloatText(float(number.number*scale))+"dppx";density=true;
+          }
+          if (!density) words.push_back("1dppx");
+          if (!args.empty()) args+=", ";
+          for (size_t i=0;i<words.size();++i) args+=(i?" ":"")+words[i];
+        }
+        value=part.substr(0,open+1)+args+")";
+      }
     } else {
-      const auto words=Tokens(CssLower(part));
+      auto words=Tokens(CssLower(part));
+      for (auto& word:words) word=length(word);
+      if (name=="background-size") {
+        value.clear();for (const auto& word:words) value+=(value.empty()?"":" ")+word;
+      } else
       if (words.size()==1) {
         if (words[0]=="center") value="50%";
         else if (words[0]=="left" || words[0]=="top") value="0%";
         else if (words[0]=="right" || words[0]=="bottom") value="100%";
+        else value=words[0];
       } else if (words.size()==2) {
         if (words[0]=="left" || words[0]=="top") value=words[1];
         else if (words[0]=="right" || words[0]=="bottom") value="calc(100% - "+words[1]+")";

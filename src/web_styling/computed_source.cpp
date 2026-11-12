@@ -52,8 +52,8 @@ void ComputeColors(ComputedStyle* style) {
     if (name == "color") current = ruyijs::domain::styling::CssComputedColor(value, {});
   for (auto& [name, value] : style->values) {
     if (!ColorProperty(name)) {
-      if (name == "background-position-x" || name == "background-position-y" || name == "background-image")
-        value = css::CssBackgroundComputed(name, value, current);
+      if (name == "background-position-x" || name == "background-position-y" || name == "background-size" || name == "background-image")
+        value = css::CssBackgroundComputed(name, value, current, style->fontSize, style->rootFontSize);
       continue;
     }
     std::string computed = ruyijs::domain::styling::CssComputedColor(value, current);

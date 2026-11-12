@@ -29,6 +29,21 @@ bool StyleDocumentURL(State& state, NodeKey node, std::string* out) {
   const NodeKey owner = snapshot.kind == NodeKind::Document ? node : snapshot.owner_document;
   return state.Check(state.model.InspectDocument(owner, &document)) && URL(state, document, out);
 }
+bool StyleDocumentBaseURL(State& state, NodeKey node, std::string* out) {
+  NodeSnapshot snapshot;DocumentSnapshot document;
+  if (!state.Check(state.model.Inspect(node,&snapshot))) return false;
+  const NodeKey owner=snapshot.kind==NodeKind::Document?node:snapshot.owner_document;
+  if (!state.Check(state.model.InspectDocument(owner,&document)) || !URL(state,document,out)) return false;
+  std::vector<NodeKey> bases;
+  if (!state.Check(state.model.Query(document.key,QueryKind::TagName,u"base",&bases))) return false;
+  for (NodeKey candidate:bases) {
+    std::string href;bool present;
+    if (!Attribute(state,candidate,u"href",&href,&present)) return false;
+    if (!present) continue;
+    return state.Check(ReadHyperlink(href,*out,HyperlinkField::Href,out));
+  }
+  return true;
+}
 bool ReadLinkStyleSource(State& state, NodeKey key, NodeKey scope,
                           const NodeSnapshot& node, StyleSheetSource* source) {
   source->document = key.document;source->key = key.node;

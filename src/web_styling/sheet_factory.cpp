@@ -58,6 +58,7 @@ std::shared_ptr<SheetCache> State::Materialize(const document_model::StyleSheetS
   cache->external = source.external;cache->ready = !source.external;
   cache->loadDelivered = !source.external;
   cache->sourceRel = source.rel;cache->sourceCors = source.crossOrigin;
+  cache->baseURL = source.baseURL;
   cache->hasCors = source.hasCrossOrigin;cache->documentURL = source.documentURL;
   cache->origin = source.origin;cache->resourceOrigin = source.resourceOrigin;
   cache->media.set(source.media);

@@ -201,6 +201,39 @@ def runtime_cases():
         's.cssText=v;return [s.background,s.backgroundColor,getComputedStyle(e).backgroundColor]});',
         [['var(--bg)','','rgb(255, 0, 0)'],['','blue','rgb(0, 0, 255)'],
          ['var(--bg)','','rgb(255, 0, 0)'],['var(--bg)','','rgb(255, 0, 0)']])
+    background('omitted_color_default',
+        's.background="none";return [s.backgroundColor,getComputedStyle(e).backgroundColor];',
+        ['rgba(0, 0, 0, 0)','rgba(0, 0, 0, 0)'])
+    background('relative_lengths',
+        's.fontSize="20px";s.background="right 2em bottom 1em / 3em auto";'
+        'const c=getComputedStyle(e);return [s.backgroundPosition,c.backgroundPosition,c.backgroundSize];',
+        ['right 2em bottom 1em','calc(100% - 40px) calc(100% - 20px)','60px auto'])
+    background('gradient_default_positions',
+        's.background="radial-gradient(circle at center,red,blue),conic-gradient(from 90deg at center,red,blue)";'
+        'return [s.backgroundImage,getComputedStyle(e).backgroundImage];',
+        ['radial-gradient(circle, red, blue), conic-gradient(from 90deg, red, blue)',
+         'radial-gradient(circle, rgb(255, 0, 0), rgb(0, 0, 255)), conic-gradient(from 90deg, rgb(255, 0, 0), rgb(0, 0, 255))'])
+    background('image_set_computed_density',
+        's.backgroundImage=' + json.dumps('image-set(' + image_url + ' 1x)') + ';'
+        'return [s.backgroundImage,getComputedStyle(e).backgroundImage];',
+        ['image-set(' + image_url + ' 1x)','image-set(' + image_url + ' 1dppx)'])
+    svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1"/></svg>'
+    check('background_relative_inline_url',
+        '(()=>{const e=document.querySelector("#bg");return [e.style.backgroundImage,getComputedStyle(e).backgroundImage]})()',
+        ['url("./images/pixel.svg")','url("https://fixture.test/images/pixel.svg")'],
+        '<title>Fixture</title><div id="bg" style="background:url(./images/pixel.svg)"></div>',
+        [('https://fixture.test/images/pixel.svg',svg,'image/svg+xml')])
+    check('background_external_sheet_url_base',
+        'getComputedStyle(document.querySelector("#bg")).backgroundImage',
+        'url("https://fixture.test/assets/images/pixel.svg")',
+        '<title>Fixture</title><link rel="stylesheet" href="/assets/css/app.css"><div id="bg"></div>',
+        [('https://fixture.test/assets/css/app.css','#bg{background:url(../images/pixel.svg)}','text/css'),
+         ('https://fixture.test/assets/images/pixel.svg',svg,'image/svg+xml')])
+    check('background_document_base_url',
+        'getComputedStyle(document.querySelector("#bg")).backgroundImage',
+        'url("https://fixture.test/assets/images/pixel.svg")',
+        '<title>Fixture</title><base href="https://fixture.test/assets/"><style>#bg{background:url(images/pixel.svg)}</style><div id="bg"></div>',
+        [('https://fixture.test/assets/images/pixel.svg',svg,'image/svg+xml')])
     return cases
 
 CONFIG = {'navigator': {'userAgent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:158.0) Gecko/20100101 Firefox/158.0', 'appVersion': '5.0 (Windows)', 'platform': 'Win32', 'language': 'en-US', 'languages': ['en-US', 'en'], 'hardwareConcurrency': 12, 'maxTouchPoints': 0}, 'screen': {'width': 1366, 'height': 768, 'availWidth': 1366, 'availHeight': 720, 'availLeft': 0, 'availTop': 0, 'colorDepth': 24, 'pixelDepth': 24}, 'viewport': {'width': 1360, 'height': 876, 'devicePixelRatio': 1}, 'locale': {'timezone': 'Asia/Shanghai', 'osLocale': 'en-US'}}
