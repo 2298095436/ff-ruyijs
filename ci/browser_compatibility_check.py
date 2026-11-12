@@ -104,6 +104,37 @@ def main():
             checks[name] = dict(passed=False, error=str(exc))
         print(name, json.dumps(checks[name], ensure_ascii=True), flush=True)
     try:
+        with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+            ctx.put_resource('https://early.fixture.test/',
+                '<script type="module">throw new Error("early module fixture")</script>',
+                headers=[['Content-Type','text/html']])
+            ctx.navigate('https://early.fixture.test/')
+            console = ctx.console_log()
+            checks['early_navigation_module_error_retained'] = dict(passed=any(
+                e.get('level') == 'error' and 'early module fixture' in e.get('text','')
+                and 'https://early.fixture.test/' in e.get('stack',[]) for e in console), console=console)
+        with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+            ctx.put_resource('https://early.fixture.test/',
+                '<script type="module">throw new Error("early frame fixture")</script>',
+                headers=[['Content-Type','text/html']])
+            ctx.load_page('https://fixture.test/', '<iframe src="https://early.fixture.test/"></iframe>')
+            ctx.advance(10, max_tasks=1000)
+            console = ctx.console_log()
+            checks['early_frame_module_error_retained'] = dict(passed=any(
+                e.get('level') == 'error' and 'early frame fixture' in e.get('text','')
+                for e in console), console=console)
+        with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+            ctx.put_resource('https://early.fixture.test/',
+                '<script>addEventListener("error",e=>e.preventDefault())</script>'
+                '<script type="module">throw new Error("cancelled module fixture")</script>',
+                headers=[['Content-Type','text/html']])
+            ctx.navigate('https://early.fixture.test/')
+            console = ctx.console_log()
+            checks['cancelled_module_error_not_reported'] = dict(passed=not any(
+                'cancelled module fixture' in e.get('text','') for e in console), console=console)
+    except Exception as exc:
+        checks['early_module_error_execution'] = dict(passed=False, error=str(exc))
+    try:
         with Context(timeout=60, mode='debug') as ctx:
             ctx.eval('const cachedNavigator = navigator')
             ctx.clear_api_log()

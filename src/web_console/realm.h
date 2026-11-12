@@ -63,6 +63,7 @@ class Realm final {
   bool Install();
   void SetClockPort(ClockPort clock, void* context);
   void CopyClockFrom(const Realm& other);
+  void ReportException(const std::string& message, const std::string& filename);
   Log& log() { return *log_; }
 
  private:

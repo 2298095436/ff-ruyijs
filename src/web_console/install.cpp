@@ -2,6 +2,7 @@
 // plain object whose prototype is Object.prototype (donor `ProtoObjectHack`),
 // branded with Symbol.toStringTag and installed once per Window realm.
 #include "web_console/internal.h"
+#include <utility>
 #include "runtime/page_helpers.h"
 #include "jsapi.h"
 #include "js/PropertyAndElement.h"
@@ -40,6 +41,13 @@ void Realm::SetClockPort(ClockPort clock, void* context) {
 void Realm::CopyClockFrom(const Realm& other) {
   state_->clock = other.state_->clock;
   state_->clockContext = other.state_->clockContext;
+}
+
+void Realm::ReportException(const std::string& message, const std::string& filename) {
+  Record record; record.realm = state_->realm; record.method = "exception";
+  record.level = "error"; record.text = message;
+  if (!filename.empty()) record.stack.push_back(filename);
+  log_->Append(std::move(record));
 }
 
 bool Realm::Install() {

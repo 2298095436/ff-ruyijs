@@ -139,12 +139,17 @@ bool PageLoad::ReportModuleFailure(Owners& owners, JS::HandleObject,
   JS_ClearPendingException(cx);
   const std::string message = report.name.empty()
       ? report.message : report.name + ": " + report.message;
+  bool allowed = true;
   if (!owners.events.FireError(owners.page, error, message.c_str(),
-                               filename.c_str(), 0, 0)) {
+                               filename.c_str(), 0, 0, &allowed)) {
     JS_ClearPendingException(cx);
     return false;
   }
   JS_ClearPendingException(cx);
+  if (allowed) {
+    BrowsingContext* context = Find(owners.document);
+    if (context && context->console) context->console->ReportException(message, filename);
+  }
   return true;
 }
 bool PageLoad::Load(Owners& owners, const std::string& url, JS::HandleString html,
