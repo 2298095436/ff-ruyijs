@@ -43,7 +43,8 @@ unsigned Slot(Iface iface) {
   if (iface == Iface::FormDataPayload) return unsigned(std::size(kTypes) + 1);
   // Host user input dispatches trusted InputEvents (trusted_input.cpp).
   if (iface == Iface::Input) return unsigned(std::size(kTypes) + 2);
-  return unsigned(std::size(kTypes) + 3);
+  if (iface == Iface::PromiseRejection) return unsigned(std::size(kTypes) + 3);
+  return unsigned(std::size(kTypes) + 4);
 }
 unsigned Slot(std::u16string_view name) {
   for (unsigned i = 0; i < std::size(kTypes); ++i) if (Equal(name, kTypes[i].name)) return i;
@@ -79,9 +80,9 @@ bool InitializeLegacyFields(JSContext* cx, const LegacyType& type,
 }
 bool SaveLegacyPrototype(State& state, Iface iface, JS::HandleObject prototype) {
   const unsigned slot = Slot(iface);
-  if (slot == std::size(kTypes) + 3) return true;
+  if (slot == std::size(kTypes) + 4) return true;
   if (!state.legacyPrototypes) {
-    state.legacyPrototypes = JS::NewArrayObject(state.cx, std::size(kTypes) + 3);
+    state.legacyPrototypes = JS::NewArrayObject(state.cx, std::size(kTypes) + 4);
     if (!state.legacyPrototypes) return false;
   }
   JS::RootedObject array(state.cx, state.legacyPrototypes);
