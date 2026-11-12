@@ -322,6 +322,8 @@ def device_memory_checks(Context):
         record('memory_secure_context_gate',ctx.eval(
             '({secure:isSecureContext,present:"deviceMemory" in navigator})'),
             dict(secure=False,present=False))
+        ctx.load_page('https://fixture.test/','')
+        record('memory_secure_context_reenabled',ctx.eval('navigator.deviceMemory'),16)
     with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
         ctx.configure_environment({'webgl':{'extensions':PROFILE_EXTENSION_NAMES}})
         actual=ctx.eval("""(() => { const g=document.createElement('canvas').getContext('webgl');

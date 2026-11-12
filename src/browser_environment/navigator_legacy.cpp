@@ -98,7 +98,7 @@ bool Environment::ConfigureSecureMembers() {
   State& s = *state_;
   JS::RootedObject prototype(s.cx, s.navigatorPrototype), page(s.cx, s.page);
   bool secure = false;
-  if (!prototype || !s.ReadSecureContext(&secure)) return false;
+  if (!prototype || !s.ReadSecureContext(&secure) || !s.RefreshDeviceMemory()) return false;
   return s.protocolHandlerSlot.Apply(s.cx, prototype, secure) &&
          s.storageSlot.Apply(s.cx, prototype, secure) &&
          s.storageManagerSlot.Apply(s.cx, page, secure) &&
