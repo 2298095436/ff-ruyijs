@@ -217,6 +217,27 @@ def runtime_cases():
         's.backgroundImage=' + json.dumps('image-set(' + image_url + ' 1x)') + ';'
         'return [s.backgroundImage,getComputedStyle(e).backgroundImage];',
         ['image-set(' + image_url + ' 1x)','image-set(' + image_url + ' 1dppx)'])
+    density_url = 'url("data:image/gif;base64,AA==")'
+    density_units = ['1x', '2dppx', '96dpi', '2dpcm', '0x', '-1x', '1px', '2dppx 3x', '']
+    density_expected = []
+    for unit, computed in [('1x','1dppx'),('2dppx','2dppx'),('96dpi','1dppx'),
+                           ('2dpcm','0.0529167dppx'),('0x','0dppx'),('-1x',None),
+                           ('1px',None),('2dppx 3x',None),('','1dppx')]:
+        density_expected.append([computed is not None,
+            'image-set(' + density_url + ' ' + (unit or '1x') + ')' if computed is not None else '',
+            'image-set(' + density_url + ' ' + computed + ')' if computed is not None else 'none'])
+    background('image_set_resolution_units',
+        'return ' + json.dumps(density_units) + '.map(unit=>{'
+        'const value="image-set(url(data:image/gif;base64,AA==)"+(unit?" "+unit:"")+")";'
+        's.cssText="";s.backgroundImage=value;return [CSS.supports("background-image",value),'
+        's.backgroundImage,getComputedStyle(e).backgroundImage]});', density_expected)
+    background('explicit_transparent_preserved',
+        's.background="transparent";return [s.backgroundColor,getComputedStyle(e).backgroundColor];',
+        ['transparent','rgba(0, 0, 0, 0)'])
+    background('empty_image_url',
+        'return ["url()",\'url("")\'].map(value=>{s.background=value;'
+        'return [s.backgroundImage,getComputedStyle(e).backgroundImage]});',
+        [['url("")','url("")'],['url("")','url("")']])
     svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1"/></svg>'
     check('background_relative_inline_url',
         '(()=>{const e=document.querySelector("#bg");return [e.style.backgroundImage,getComputedStyle(e).backgroundImage]})()',

@@ -73,8 +73,8 @@ bool Image(const std::string& value) {
         const auto v=CssLower(words[i]);
         if (v.starts_with("type(")) {if(type) return false;type=true;}
         else {
-          const auto number=CssNumericParse(v.ends_with('x')?v.substr(0,v.size()-1)+"dppx":v);
-          if (density || number.kind!=CssResolution || number.number<=0) return false;
+          const auto number=CssNumericParse(v);
+          if (density || number.kind!=CssResolution || number.number<0) return false;
           density=true;
         }
       }
@@ -304,7 +304,8 @@ std::string CssBackgroundResolveURLs(const std::string& input,const std::string&
       else {decoded+=char(0xf0|(code>>18));decoded+=char(0x80|((code>>12)&63));decoded+=char(0x80|((code>>6)&63));decoded+=char(0x80|(code&63));}
     }
     ruyijs::domain::browser_environment::UrlValue url;
-    std::string resolved=ruyijs::domain::browser_environment::UrlValue::Resolve(decoded,base,&url)?url.href():"about:invalid";
+    std::string resolved=decoded.empty()?std::string():
+        ruyijs::domain::browser_environment::UrlValue::Resolve(decoded,base,&url)?url.href():"about:invalid";
     result+="url(\"";
     for(char c:resolved) {if(c=='"'||c=='\\') result+='\\';result+=c;}
     result+="\")";i=end+1;
@@ -317,6 +318,19 @@ std::string CssBackgroundSpecifiedImage(const std::string& input) {
   for (const auto& part:CssSplit(input,',')) {
     std::string value=part;
     const auto open=value.find('(');
+    if (open!=value.npos && Word(CssLower(value.substr(0,open)),"image-set,-webkit-image-set")) {
+      std::string args;
+      for (const auto& choice:CssSplit(value.substr(open+1,value.size()-open-2),',')) {
+        auto words=Tokens(choice);
+        const bool density=std::any_of(words.begin(),words.end(),[](const auto& word){
+          return CssNumericParse(word).kind==CssResolution;
+        });
+        if (!density) words.insert(words.begin()+std::min(size_t(1),words.size()),"1x");
+        if (!args.empty()) args+=", ";
+        for (size_t i=0;i<words.size();++i) args+=(i?" ":"")+words[i];
+      }
+      value=part.substr(0,open+1)+args+")";
+    }
     if (open!=value.npos && CssLower(value.substr(0,open)).find("gradient")!=std::string::npos) {
       auto groups=CssSplit(value.substr(open+1,value.size()-open-2),',');
       if (!groups.empty()) {
@@ -474,7 +488,7 @@ std::string CssBackgroundSerialize(const std::vector<CssDeclarationValue>& rows,
     if (lists[6][i]!="padding-box" || lists[7][i]!="border-box") {
       add(lists[6][i]); if (lists[7][i]!=lists[6][i]) add(lists[7][i]);
     }
-    if (i+1==count && values[8]!="transparent" && values[8]!="rgba(0, 0, 0, 0)") add(values[8]);
+    if (i+1==count && values[8]!="rgba(0, 0, 0, 0)") add(values[8]);
     if (layer.empty()) layer="none";
     if (i) result+=", "; result+=layer;
   }
