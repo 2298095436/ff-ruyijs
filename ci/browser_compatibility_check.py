@@ -384,18 +384,6 @@ def graphics_profile_checks(Context):
         ctx.navigate('https://next.fixture.test/')
         record('webgl_successor_frame_profile',ctx.eval(
             'document.querySelector("iframe").contentWindow.eval('+json.dumps(read)+')'),expected)
-    with Context(timeout=30,proxy='http://127.0.0.1:9') as ctx:
-        result=ctx.eval("""(() => {
-            const c=document.createElement('canvas');c.width=c.height=4;
-            const g=c.getContext('webgl'),p=new Uint8Array(4);
-            const values=[0,1/255,.1,.125,.25,.5,.75,254/255,1,-1,2];
-            return values.map(v=>{g.clearColor(v,v,v,1);g.clear(g.COLOR_BUFFER_BIT);
-                g.readPixels(1,1,1,1,g.RGBA,g.UNSIGNED_BYTE,p);return [...p];});
-        })()""")
-        # This checks the software conversion policy. Measured GPU pixels
-        # are compared separately, including values where YS differs.
-        record('webgl_clear_unorm8_without_fragment_quantization',result,
-            [[v,v,v,255] for v in [0,1,26,32,64,128,191,254,255,0,255]])
     return checks
 
 

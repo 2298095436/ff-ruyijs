@@ -4,7 +4,6 @@
 #include "web_graphics/draw_calls.h"
 #include "web_graphics/draw_sample.h"
 #include <algorithm>
-#include <cmath>
 
 namespace ruyijs::web_graphics {
 bool ClearCall(JSContext* cx, unsigned argc, JS::Value* vp) {
@@ -41,14 +40,8 @@ bool ClearCall(JSContext* cx, unsigned argc, JS::Value* vp) {
   const bool has_color = GetParameterState(context, 0x0C22, &color);
   const bool has_mask = GetParameterState(context, 0x0C23, &channels);
   uint8_t rgba[4] = {};
-  for (int channel = 0; channel < 4; ++channel) {
-    // Clear values bypass fragment mediump and multisample resolve.
-    // Convert the clamped float directly to the RGBA8 buffer.
-    // This is a software rounding policy, not a hardware GPU model.
-    const float component = has_color ? float(color.values[channel]) : 0.f;
-    rgba[channel] = !(component > 0.f) ? 0 : component >= 1.f ? 255 :
-        uint8_t(std::floor(double(component) * 255.0 + 0.5));
-  }
+  for (int channel = 0; channel < 4; ++channel)
+    rgba[channel] = uint8_t(draw_detail::Unorm8(has_color ? float(color.values[channel]) : 0.f));
   for (int64_t y = bottom; y < top; ++y) {
     for (int64_t x = left; x < right; ++x) {
       auto* pixel = context.drawingBuffer.data() + (size_t(y) * size_t(width) + size_t(x)) * 4;
