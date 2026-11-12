@@ -257,6 +257,8 @@ def runtime_cases():
         [('https://fixture.test/assets/images/pixel.svg',svg,'image/svg+xml')])
     return cases
 
+PROFILE_EXTENSION_NAMES = ['ANGLE_instanced_arrays', 'EXT_blend_minmax', 'EXT_color_buffer_half_float', 'EXT_depth_clamp', 'EXT_disjoint_timer_query', 'EXT_float_blend', 'EXT_frag_depth', 'EXT_sRGB', 'EXT_shader_texture_lod', 'EXT_texture_compression_bptc', 'EXT_texture_compression_rgtc', 'EXT_texture_filter_anisotropic', 'EXT_texture_norm16', 'OES_draw_buffers_indexed', 'OES_element_index_uint', 'OES_fbo_render_mipmap', 'OES_standard_derivatives', 'OES_texture_float', 'OES_texture_float_linear', 'OES_texture_half_float', 'OES_texture_half_float_linear', 'OES_vertex_array_object', 'WEBGL_color_buffer_float', 'WEBGL_compressed_texture_astc', 'WEBGL_compressed_texture_etc', 'WEBGL_compressed_texture_etc1', 'WEBGL_compressed_texture_pvrtc', 'WEBGL_compressed_texture_s3tc', 'WEBGL_compressed_texture_s3tc_srgb', 'WEBGL_debug_renderer_info', 'WEBGL_debug_shaders', 'WEBGL_depth_texture', 'WEBGL_draw_buffers', 'WEBGL_explicit_present', 'WEBGL_lose_context']
+
 def device_memory_checks(Context):
     checks = {}
     def record(name, actual, expected):
@@ -287,7 +289,7 @@ def device_memory_checks(Context):
               +'let invalid=false;try{d.get.call({});}catch(e){invalid=e instanceof TypeError;}'
               +'postMessage({value:navigator.deviceMemory,native:d.get.toString().includes("[native code]"),invalid});'
             ],{type:'application/javascript'}));
-            const w=new Worker(u);w.onmessage=e=>{memoryWorker=e.data;w.terminate();URL.revokeObjectURL(u);};""")
+            const w=new Worker(u);w.onmessage=e=>{memoryWorker=e.data;w.terminate();URL.revokeObjectURL(u);};void 0;""")
         for _ in range(50):
             ctx.advance(20,max_tasks=2000)
             worker=ctx.eval('window.memoryWorker')
@@ -320,6 +322,20 @@ def device_memory_checks(Context):
         record('memory_secure_context_gate',ctx.eval(
             '({secure:isSecureContext,present:"deviceMemory" in navigator})'),
             dict(secure=False,present=False))
+    with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+        ctx.configure_environment({'webgl':{'extensions':PROFILE_EXTENSION_NAMES}})
+        actual=ctx.eval("""(() => { const g=document.createElement('canvas').getContext('webgl');
+          const names=g.getSupportedExtensions();
+          return {names,available:names.every(name=>g.getExtension(name)!==null)};})()""")
+        record('webgl_35_extensions_roundtrip',actual,
+            dict(names=PROFILE_EXTENSION_NAMES,available=True))
+    with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+        rejected=[]
+        for group in [{'webgl':{'extensions':['EXT_clip_control']*129}},
+                      {'navigator':{'languages':['en-US']*33}}]:
+            try:ctx.configure_environment(group)
+            except Exception:rejected.append(True)
+        record('webgl_and_language_list_bounds',len(rejected),2)
     return checks
 
 

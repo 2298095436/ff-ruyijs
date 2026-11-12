@@ -126,10 +126,11 @@ bool ReadField(JSContext* cx, JS::HandleValue value, Kind kind, uint32_t field,
   // device lists may legitimately be empty (a profile that removes everything).
   const bool needsEntry = kind == Kind::Navigator || kind == Kind::Speech;
   // An installed-font list is a machine's whole family set (hundreds of names).
-  const uint32_t limit = kind == Kind::Fonts ? 4096 : 32;
+  const uint32_t limit = kind == Kind::Fonts ? 4096 : kind == Kind::WebGL ? 128 : 32;
   if (length > limit || (length == 0 && needsEntry))
     return Error(cx, needsEntry ? "languages must contain 1 to 32 entries"
                                 : kind == Kind::Fonts ? "value must contain at most 4096 entries"
+                                : kind == Kind::WebGL ? "value must contain at most 128 entries"
                                                       : "value must contain at most 32 entries",
                  JSEXN_RANGEERR);
   for (uint32_t index = 0; index < length; ++index) {
