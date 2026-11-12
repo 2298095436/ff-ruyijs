@@ -50,6 +50,7 @@ bool DispatchTrusted(JSContext*, JS::HandleObject target, const char* type,
 // keydown/keyup/keypress/touchstart/touchend is being delivered, including the
 // microtask checkpoints that follow its listeners. Process-wide (any realm).
 bool HandlingUserInput();
+bool DispatchPromiseRejection(JSContext*, JS::HandleObject, JS::HandleValue, bool*);
 class Realm {
  public:
   Realm(JSContext* cx, JS::HandleObject page);

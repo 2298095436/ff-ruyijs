@@ -130,6 +130,19 @@ jobs:
       - name: Test the installed wheel
         run: ci/linux/build.sh test
 
+      - name: Browser compatibility and lossless API pagination
+        run: |
+          "$RUNNER_TEMP/wheel-test/bin/python" ci/browser_compatibility_check.py
+
+      - name: Upload browser compatibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-compatibility-linux
+          path: artifacts/browser-compatibility.json
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Disk after build
         if: always()
         run: |

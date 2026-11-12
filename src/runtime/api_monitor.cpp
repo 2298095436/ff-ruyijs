@@ -4,6 +4,8 @@
 #include "jsapi.h"
 #include "js/Array.h"
 #include "js/PropertyAndElement.h"
+#include "js/Conversions.h"
+#include <cmath>
 
 namespace ruyijs {
 namespace observability = ruyijs::domain::observability;
@@ -11,13 +13,14 @@ namespace observability = ruyijs::domain::observability;
 // One Context's monitor state, kept behind the header's opaque declaration.
 struct ApiMonitorState {
   observability::ApiMonitorAggregate monitor;
+  uint64_t dropped = 0;
 };
 
 namespace {
 // Bound on retained records for one Context. The aggregate itself keeps every
 // accepted access, so the adapter stops recording instead of growing without
 // limit; a drained log accepts records again.
-constexpr size_t kMaxRecords = 20000;
+constexpr size_t kMaxRecords = 1000000;
 
 const char* TypeName(observability::CallType type) {
   return observability::call_type_name(type);
@@ -49,7 +52,8 @@ void ApiMonitor::Record(const char* iface, const char* member, int type) {
     default: return;
   }
   auto& monitor = state_->monitor;
-  if (!monitor.enabled() || monitor.record_count() >= kMaxRecords) return;
+  if (!monitor.enabled()) return;
+  if (monitor.record_count() >= kMaxRecords) { ++state_->dropped; return; }
   // The installer's own interface and member names; the path is what the source
   // monitor reports, so a watch entry matches the same string.
   std::string path(iface);
@@ -69,10 +73,13 @@ void ApiMonitor::Record(const char* iface, const char* member, int type) {
 }
 
 bool ApiMonitor::Describe(const std::string& filter, bool drain,
-                          JS::MutableHandleValue result) {
+                          JS::MutableHandleValue result, size_t offset, size_t limit) {
   JS::RootedValueVector entries(cx_);
+  size_t matched = 0;
   for (const auto& record : state_->monitor.records()) {
     if (!filter.empty() && record.path().value() != filter) continue;
+    if (matched++ < offset) continue;
+    if (entries.length() >= limit) break;
     JS::RootedObject entry(cx_, JS_NewPlainObject(cx_));
     JS::RootedString path(cx_, JS_NewStringCopyZ(cx_, record.path().value().c_str()));
     JS::RootedString kind(cx_, JS_NewStringCopyZ(cx_, TypeName(record.type())));
@@ -87,7 +94,7 @@ bool ApiMonitor::Describe(const std::string& filter, bool drain,
   }
   JS::RootedObject array(cx_, JS::NewArrayObject(cx_, entries));
   if (!array) return false;
-  if (drain) state_->monitor.clear_records();
+  if (drain) { state_->monitor.clear_records(); state_->dropped = 0; }
   result.setObject(*array);
   return true;
 }
@@ -95,19 +102,35 @@ bool ApiMonitor::Describe(const std::string& filter, bool drain,
 bool ApiMonitor::Request(JS::HandleObject request, JS::MutableHandleValue result) {
   std::string action, filter;
   if (!StringProperty(cx_, request, "action", &action)) return false;
-  if (action != "peek" && action != "get" && action != "clear") {
+  if (action == "stats") {
+    JS::RootedObject object(cx_, JS_NewPlainObject(cx_));
+    if (!object || !JS_DefineProperty(cx_, object, "entries", double(state_->monitor.record_count()), JSPROP_ENUMERATE) ||
+        !JS_DefineProperty(cx_, object, "capacity", double(kMaxRecords), JSPROP_ENUMERATE) ||
+        !JS_DefineProperty(cx_, object, "dropped", double(state_->dropped), JSPROP_ENUMERATE)) return false;
+    result.setObject(*object); return true;
+  }
+  if (action != "peek" && action != "get" && action != "clear" && action != "page") {
     JS_ReportErrorASCII(cx_, "Unknown api_log action");
     return false;
   }
   if (!StringProperty(cx_, request, "filter", &filter, "")) return false;
   if (action == "clear") {
-    state_->monitor.clear_records();
+    state_->monitor.clear_records(); state_->dropped = 0;
     JS::RootedObject object(cx_, JS_NewPlainObject(cx_));
     if (!object || !JS_DefineProperty(cx_, object, "entries", 0.0, JSPROP_ENUMERATE))
       return false;
     result.setObject(*object);
     return true;
   }
-  return Describe(filter, action == "get", result);
+  size_t offset = 0, limit = kMaxRecords;
+  if (action == "page") {
+    JS::RootedValue start(cx_), count(cx_); double a, b;
+    if (!JS_GetProperty(cx_, request, "offset", &start) || !JS_GetProperty(cx_, request, "limit", &count) ||
+        !JS::ToNumber(cx_, start, &a) || !JS::ToNumber(cx_, count, &b)) return false;
+    if (!std::isfinite(a) || !std::isfinite(b) || a < 0 || a > kMaxRecords || b < 1 || b > 2000 ||
+        a != std::floor(a) || b != std::floor(b)) { JS_ReportErrorASCII(cx_, "Invalid API log page"); return false; }
+    offset = size_t(a); limit = size_t(b);
+  }
+  return Describe(filter, action == "get", result, offset, limit);
 }
 }

@@ -9,6 +9,7 @@
 #include "domain/document_model/html_direction.h"
 #include "js/Conversions.h"
 #include "js/PropertyAndElement.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 
@@ -118,6 +119,81 @@ bool SpellcheckValue(State& state, NodeKey key, bool* out) {
   *out = self.local_name && *self.local_name == u"textarea";
   return true;
 }
+struct RenderedText {
+  DomString text;
+  unsigned breaks = 0;
+  bool space = false;
+  void Boundary(unsigned count) { breaks = std::max(breaks, count); space = false; }
+  void Character(char16_t c, bool preserve) {
+    if (!preserve && (c == u' ' || c == u'\t' || c == u'\n' || c == u'\r' || c == u'\f')) {
+      space = !text.empty(); return;
+    }
+    if (breaks && !text.empty()) {
+      unsigned trailing = 0;
+      for (auto it = text.rbegin(); it != text.rend() && *it == u'\n'; ++it) ++trailing;
+      while (trailing++ < breaks) text += u'\n';
+    } else if (space && !text.empty() && text.back() != u'\n' && text.back() != u' ') text += u' ';
+    breaks = 0; space = false; text += c;
+  }
+};
+bool TextStyle(State& state, NodeKey key, RenderedTextStyle* style) {
+  if (!state.renderedTextStyle) return true;
+  JS::RootedValue value(state.cx);
+  if (!state.Wrap(key, &value) || !value.isObject()) return false;
+  JS::RootedObject object(state.cx, &value.toObject());
+  return state.renderedTextStyle(state.renderedTextContext, object, style);
+}
+bool CollectRendered(State& state, NodeKey key, const RenderedTextStyle& inherited,
+                     RenderedText* result, unsigned depth = 0) {
+  if (depth > 256) { JS_ReportErrorASCII(state.cx, "innerText tree depth exceeded"); return false; }
+  NodeSnapshot node;
+  if (!state.Check(state.model.Inspect(key, &node))) return false;
+  if (node.kind == NodeKind::Text) {
+    if (inherited.visibility != "hidden" && inherited.visibility != "collapse" && node.node_value)
+      for (char16_t c : *node.node_value)
+        result->Character(c, inherited.whiteSpace == "pre" || inherited.whiteSpace == "pre-wrap" || inherited.whiteSpace == "break-spaces");
+    return true;
+  }
+  if (node.kind != NodeKind::Element) return true;
+  RenderedTextStyle style;
+  if (!TextStyle(state, key, &style)) return false;
+  if (style.display == "none") return true;
+  const DomString tag = node.local_name.value_or(DomString());
+  if (tag == u"script" || tag == u"style" || tag == u"template") return true;
+  if (tag == u"br") { result->Character(u'\n', true); return true; }
+  const bool block = style.display == "block" || style.display == "flex" || style.display == "grid" ||
+      style.display == "list-item" || style.display == "table" || style.display == "table-row";
+  const unsigned boundary = tag == u"p" ? 2 : block ? 1 : 0;
+  if (boundary) result->Boundary(boundary);
+  std::vector<NodeKey> children;
+  if (!state.Check(state.model.Children(key, &children))) return false;
+  for (auto child : children) if (!CollectRendered(state, child, style, result, depth + 1)) return false;
+  if (boundary) result->Boundary(boundary);
+  return true;
+}
+bool InnerTextValue(State& state, NodeKey key, JS::MutableHandleValue out) {
+  NodeSnapshot node;
+  if (!state.Check(state.model.Inspect(key, &node))) return false;
+  bool rendered = node.is_connected;
+  for (auto ancestor = key; rendered && ancestor.node;) {
+    NodeSnapshot current;
+    if (!state.Check(state.model.Inspect(ancestor, &current))) return false;
+    if (current.kind == NodeKind::Element) {
+      RenderedTextStyle style;
+      if (!TextStyle(state, ancestor, &style)) return false;
+      if (style.display == "none") rendered = false;
+    }
+    ancestor = current.parent;
+  }
+  if (!rendered) {
+    std::optional<DomString> text;
+    if (!state.Check(state.model.TextContent(key, &text))) return false;
+    return Value(state.cx, text ? DomStringView(*text) : DomStringView(), out);
+  }
+  RenderedText result;
+  if (!CollectRendered(state, key, {}, &result)) return false;
+  return Value(state.cx, DomStringView(result.text), out);
+}
 bool ReflectedGet(JSContext* cx, unsigned argc, JS::Value* vp) {
   auto args = JS::CallArgsFromVp(argc, vp);
   auto prop = Prop(FunctionSlot(args));
@@ -125,11 +201,7 @@ bool ReflectedGet(JSContext* cx, unsigned argc, JS::Value* vp) {
   if (!entry) return false;
   State& state = *entry->owner;
   if (prop >= OffsetWidth) return OffsetGet(cx, args, prop, entry);
-  if (prop == InnerText) {
-    std::optional<DomString> text;
-    if (!state.Check(state.model.TextContent(entry->key, &text))) return false;
-    return Value(cx, text ? DomStringView(*text) : DomStringView(), args.rval());
-  }
+  if (prop == InnerText) return InnerTextValue(state, entry->key, args.rval());
   std::optional<DomString> value;
   if (!state.Check(state.model.GetAttribute(entry->key, DomString(Attribute(prop)), &value)))
     return false;

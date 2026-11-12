@@ -174,6 +174,7 @@ BrowsingContext::~BrowsingContext() {
   if (document) {
     document->SetFormPorts(nullptr, nullptr, nullptr);
     document->SetImageLoadPort(nullptr, nullptr);
+    document->SetRenderedTextStylePort(nullptr, nullptr);
     document->SetOffsetGeometryPort(nullptr, nullptr);
     document->SetElementScrollPort({});
     document->SetMediaKeysCheckPort(nullptr, nullptr);

@@ -179,10 +179,11 @@ bool ModuleSession::DocumentBase(std::string* base) {
 }
 
 bool ModuleSession::Load(const std::string& url, const std::string& source,
-                         JS::MutableHandleObject module) {
+                         JS::MutableHandleObject module, bool inlineScript) {
   Scope scope(*this);
   if (!hostDefined_) return false;
-  if (JSObject* found = Find(url)) {
+  const std::string identity = inlineScript ? url + " [inline " + std::to_string(records_.size()) + "]" : url;
+  if (JSObject* found = Find(identity)) {
     module.set(found);
   } else {
     JS::RootedString bytes(cx_, JS_NewStringCopyUTF8N(
@@ -199,7 +200,7 @@ bool ModuleSession::Load(const std::string& url, const std::string& source,
     Record record;
     record.url = url;
     record.module = std::make_unique<JS::PersistentRootedObject>(cx_, compiled);
-    records_.emplace(url, std::move(record));
+    records_.emplace(identity, std::move(record));
     module.set(compiled);
   }
   root_ = module;

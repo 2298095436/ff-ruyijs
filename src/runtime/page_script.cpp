@@ -111,9 +111,7 @@ bool PageLoad::Source(Owners& owners, JS::HandleObject script, const std::string
   web_security::Realm* security = context ? context->security.get() : nullptr;
   const bool parser_inserted = load_error == nullptr;
   if (src.isNull()) {
-    // This slice handles parser-inserted external modules only. Inline module
-    // evaluation and dynamic module preparation remain outside this owner pass.
-    if (is_module) return true;
+    if (is_module && defer) *defer = true;
     JS::RootedValue inline_source(cx);
     if (!owners.document.ScriptText(script, &inline_source)) return false;
     *filename = base;

@@ -149,6 +149,7 @@ class Realm final {
   // Bound by the shared coordinator after the Canvas owner installs; cleared before teardown.
   void SetCanvasDimensionPort(CanvasDimensionPort port, void* context);
   // HTMLElement offset* read the layout owner through this port (bound after install).
+  void SetRenderedTextStylePort(RenderedTextStylePort port, void* context);
   void SetOffsetGeometryPort(OffsetGeometryPort port, void* context);
   void SetElementScrollPort(const ElementScrollPort& port);
   // The queued scroll notification of |element| is being delivered.

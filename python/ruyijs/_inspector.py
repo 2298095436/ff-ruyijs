@@ -25,3 +25,11 @@ class InspectorControl:
     def clear_api_log(self):
         """Drop every recorded entry and report the remaining count."""
         return self._api_log("clear")
+
+    def api_log_stats(self):
+        """Return retained count, native capacity and exact dropped count."""
+        return self._api_log("stats")
+
+    def peek_api_log_page(self, offset=0, limit=1000):
+        """Read a stable bounded page without draining the native monitor."""
+        return self._api_log("page", offset=offset, limit=limit)

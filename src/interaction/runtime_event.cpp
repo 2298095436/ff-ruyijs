@@ -94,6 +94,23 @@ bool FireRuntimeEvent(State& state, JS::HandleObject target, const char* interfa
   return !hostInput || !trusted || ProcessCloseInput(state,target,object,type,result);
 }
 
+bool DispatchPromiseRejection(JSContext* cx, JS::HandleObject promise,
+                              JS::HandleValue reason, bool* allowed) {
+  JSObject* global = JS::CurrentGlobalOrNull(cx);
+  State* state = activeState;
+  while (state && (state->cx != cx || state->page.get() != global)) state = state->previous;
+  if (!state) return false;
+  JS::RootedObject target(cx, state->page), init(cx, JS_NewPlainObject(cx)), prototype(cx);
+  JS::RootedValue promiseValue(cx, JS::ObjectValue(*promise)), reasonValue(cx, reason);
+  if (!init || !JS_WrapValue(cx, &promiseValue) || !JS_WrapValue(cx, &reasonValue) ||
+      !ReadInstalledEventPrototype(*state, Iface::PromiseRejection, &prototype) ||
+      !JS_DefineProperty(cx, init, "promise", promiseValue, JSPROP_ENUMERATE) ||
+      !JS_DefineProperty(cx, init, "reason", reasonValue, JSPROP_ENUMERATE) ||
+      !JS_DefineProperty(cx, init, "cancelable", true, JSPROP_ENUMERATE)) return false;
+  return FireRuntimeEvent(*state, target, "PromiseRejectionEvent", "unhandledrejection",
+      Iface::PromiseRejection, Kind::PromiseRejection, init, prototype, -1, true, allowed);
+}
+
 // The `input` RPC: one trusted Mouse/Pointer event through the shared
 // trusted-input factory (trusted_input.cpp).
 bool DispatchInput(JSContext* cx, JS::HandleObject target, const char* type,

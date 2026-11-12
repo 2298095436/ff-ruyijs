@@ -3,6 +3,8 @@
 #include "js/TypeDecls.h"
 
 namespace ruyijs::document_model {
+struct RenderedTextStyle { std::string display, visibility, whiteSpace; };
+using RenderedTextStylePort = bool (*)(void*, JS::HandleObject, RenderedTextStyle*);
 // A short-lived projection of the existing composed tree, never a node store.
 struct LayoutNodeSource {
   bool element = false, text = false, renderedDocument = false;

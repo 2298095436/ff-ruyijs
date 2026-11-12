@@ -235,6 +235,8 @@ struct State {
   void* imageLoadContext = nullptr;
   CanvasDimensionPort canvasDimensions = nullptr;
   void* canvasDimensionsContext = nullptr;
+  RenderedTextStylePort renderedTextStyle = nullptr;
+  void* renderedTextContext = nullptr;
   OffsetGeometryPort offsetGeometry = nullptr;
   void* offsetGeometryContext = nullptr;
   ElementScrollPort elementScroll;

@@ -32,7 +32,7 @@ class ApiMonitor final {
   bool Request(JS::HandleObject request, JS::MutableHandleValue result);
 
  private:
-  bool Describe(const std::string& filter, bool drain, JS::MutableHandleValue result);
+  bool Describe(const std::string& filter, bool drain, JS::MutableHandleValue result, size_t offset, size_t limit);
   JSContext* cx_;
   std::unique_ptr<ApiMonitorState> state_;
 };

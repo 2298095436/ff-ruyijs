@@ -13,38 +13,37 @@
 #include "js/CharacterEncoding.h"
 #include "js/Realm.h"
 #include <cstdio>
+#include "document_model/model_html.h"
+#include "domain/document_model/script_state.h"
+#include "js/StableStringChars.h"
 
 namespace ruyijs {
 namespace {
 // The src of every classic <script> start tag (stylesheets load through the
 // Styling owner's own path and are not preloaded here).
-void Collect(const std::string& markup, std::vector<std::string>* urls) {
-  size_t at = 0;
-  while ((at = markup.find('<', at)) != std::string::npos) {
-    ++at;
-    size_t start = at;
-    while (start < markup.size() && markup[start] == '/') ++start;
-    const size_t name_end = markup.find_first_of(" \t\r\n/>", start);
-    if (name_end == std::string::npos) return;
-    std::string name = markup.substr(start, name_end - start);
-    for (char& c : name) if (c >= 'A' && c <= 'Z') c = char(c - 'A' + 'a');
-    const size_t end = markup.find('>', name_end);
-    if (end == std::string::npos) return;
-    at = end + 1;
-    if (name != "script") continue;
-    const std::string tag = markup.substr(name_end, end - name_end);
-    // Classic scripts only: a module or data-block type is not fetched by the
-    // parser path, so preloading it would only add a request.
-    if (tag.find("type=") != std::string::npos && tag.find("javascript") == std::string::npos) continue;
-    const size_t src = tag.find("src=");
-    if (src == std::string::npos) continue;
-    size_t value = src + 4;
-    if (value >= tag.size() || (tag[value] != '"' && tag[value] != '\'')) continue;
-    const char quote = tag[value++];
-    const size_t close = tag.find(quote, value);
-    if (close == std::string::npos || close == value) continue;
-    urls->push_back(tag.substr(value, close - value));
-    if (urls->size() >= 64) return;
+bool Collect(JSContext* cx, JS::HandleString markup, std::vector<std::string>* urls) {
+  JS::AutoStableStringChars chars(cx);
+  if (!chars.initTwoByte(cx, markup)) return false;
+  document_model::html::Tokenizer tokenizer(
+      document_model::DomStringView(chars.twoByteChars(), chars.length()));
+  for (;;) {
+    auto token = tokenizer.Next();
+    using Token = document_model::html::Token;
+    if (token.kind == Token::Kind::End) return true;
+    if (token.kind != Token::Kind::StartTag || token.name != u"script") continue;
+    document_model::DomString reference, type;
+    for (const auto& attribute : token.attributes) {
+      if (attribute.name == u"src") reference = attribute.value;
+      if (attribute.name == u"type") type = attribute.value;
+    }
+    std::string typeText;
+    for (char16_t c : type) typeText.push_back(c < 128 ? char(c) : '?');
+    if (!domain::document_model::script_classic<char>(typeText) || reference.empty()) continue;
+    JS::RootedString value(cx, JS_NewUCStringCopyN(cx, reference.data(), reference.size()));
+    std::string text;
+    if (!value || !ToUTF8(cx, value, &text)) return false;
+    urls->push_back(std::move(text));
+    if (urls->size() >= 64) return true;
   }
 }
 }
@@ -58,10 +57,8 @@ void PageLoad::StartPreloads(JS::HandleString markup, const std::string& base,
                              resource_network::Realm* frame) {
   if (!frame) preloads_.clear();
   if (!transport_ || base.empty()) return;
-  std::string text;
-  if (!ToUTF8(cx_, markup, &text)) return;
   std::vector<std::string> references;
-  Collect(text, &references);
+  if (!Collect(cx_, markup, &references)) return;
   for (const std::string& reference : references) {
     std::string url;
     // One speculative request per URL: the first script element that asks

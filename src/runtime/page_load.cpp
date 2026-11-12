@@ -509,7 +509,9 @@ bool PageLoad::Produce(Owners& owners, JS::HandleString html, JS::MutableHandleV
       bool loaded = false;
       {
         ModuleSession::Scope scope(session);
-        loaded = session.Load(names[index], sourceText, &module);
+        JS::RootedValue moduleSrc(cx);
+        if (!owners.document.ScriptAttribute(script, u"src", &moduleSrc)) return false;
+        loaded = session.Load(names[index], sourceText, &module, moduleSrc.isNull());
         if (loaded) loaded = session.Evaluate(module, &promise);
       }
       if (!loaded) {

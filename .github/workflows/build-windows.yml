@@ -224,6 +224,20 @@ jobs:
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\engine_check.py" --network
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Browser compatibility and lossless API pagination
+        run: |
+          & "$env:RUNNER_TEMP\wheel-test\Scripts\python.exe" ci/browser_compatibility_check.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload browser compatibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-compatibility-windows
+          path: artifacts/browser-compatibility.json
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Upload the wheel and runtime
         if: always()
         uses: actions/upload-artifact@v4

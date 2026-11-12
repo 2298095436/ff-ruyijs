@@ -12,6 +12,14 @@
 namespace ruyijs {
 bool BindGeometryPorts(BrowsingContext& context) {
   context.document->SetGeometryFactory(context.geometry.get());
+  context.document->SetRenderedTextStylePort([](void* raw, JS::HandleObject element,
+      document_model::RenderedTextStyle* out) {
+    auto& owner = *static_cast<BrowsingContext*>(raw);
+    web_styling::ComputedStyle style;
+    if (!owner.styling->ReadComputed(element, &style)) return false;
+    out->display = style.Get("display"); out->visibility = style.Get("visibility");
+    out->whiteSpace = style.Get("white-space"); return true;
+  }, &context);
   web_geometry::SvgPorts ports;
   ports.context = &context;
   ports.node = [](void* raw, JS::HandleValue value, document_model::GeometryNode* out,

@@ -1,6 +1,8 @@
 #include "runtime/exception_capture.h"
 #include "js/Exception.h"
 #include "js/Realm.h"
+#include "interaction/realm.h"
+#include "js/ValueArray.h"
 
 namespace ruyijs {
 static thread_local ExceptionCapture* activeCapture = nullptr;
@@ -85,18 +87,25 @@ void ExceptionCapture::TrackRejection(
 
 bool ExceptionCapture::Finish(JS::MutableHandleValue value, bool* success) {
   if (JS_IsExceptionPending(cx_)) CapturePending();
+  JS::RootedObjectVector pending(cx_);
   for (size_t index = 0; index < rejectionCount_; ++index) {
-    JS::RootedObject promise(cx_, rejections_[index]);
+    if (!pending.append(rejections_[index])) return false;
+    rejections_[index] = nullptr;
+  }
+  rejectionCount_ = 0;
+  for (size_t index = 0; index < pending.length(); ++index) {
+    JS::RootedObject promise(cx_, pending[index]);
     JSAutoRealm realm(cx_, promise);
     if (JS::GetPromiseState(promise) == JS::PromiseState::Rejected &&
         !JS::GetPromiseIsHandled(promise)) {
       JS::RootedValue reason(cx_, JS::GetPromiseResult(promise));
       JS::RootedObject stack(cx_, JS::GetPromiseResolutionSite(promise));
-      Record(reason, stack);
+      bool allowed = true;
+      const bool dispatched = interaction::DispatchPromiseRejection(cx_, promise, reason, &allowed);
+      if (JS_IsExceptionPending(cx_)) CapturePending();
+      if (!dispatched || allowed) Record(reason, stack);
     }
-    rejections_[index] = nullptr;
   }
-  rejectionCount_ = 0;
   if (!failed_) return true;
   *success = false;
   return CreateExceptionValue(cx_, report_, value);

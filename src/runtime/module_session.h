@@ -43,7 +43,7 @@ class ModuleSession final {
   // and return the module record.  Imported bytes are fetched synchronously
   // through the existing Resource Network owner.
   bool Load(const std::string& url, const std::string& source,
-            JS::MutableHandleObject module);
+            JS::MutableHandleObject module, bool inlineScript = false);
   // Starts ModuleEvaluate and returns its promise (including a pending TLA
   // promise).  The caller intentionally does not wait for or drain this value.
   bool Evaluate(JS::HandleObject module, JS::MutableHandleValue promise);
