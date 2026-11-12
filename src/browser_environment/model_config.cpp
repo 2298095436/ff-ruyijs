@@ -48,6 +48,9 @@ bool Model::Configure(const std::vector<Change>& changes) noexcept {
           case 18: extra_pdf_viewer = value.boolean; break;
           case 19: extra_online = value.boolean; break;
           case 20: candidate->global_privacy_control = value.boolean; break;
+          case kNavigatorDeviceMemory:
+            candidate->device_memory_present = !value.null;
+            candidate->device_memory = value.number; break;
           default: return false;
         }
       } else if (change.kind == Kind::Screen) {

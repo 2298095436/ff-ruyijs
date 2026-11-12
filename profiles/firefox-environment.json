@@ -23,7 +23,8 @@
     "doNotTrack": "unspecified",
     "pdfViewerEnabled": true,
     "onLine": true,
-    "globalPrivacyControl": false
+    "globalPrivacyControl": false,
+    "deviceMemory": null
   },
   "screen": {
     "width": 1366,

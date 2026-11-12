@@ -46,7 +46,8 @@ bool State::Read(Kind kind, uint32_t field, ValueType type,
     JS_ReportOutOfMemory(cx);  // An about:blank origin is inherited from its creator.
     return false;
   }
-  if (type == ValueType::Integer) result.setInt32(value.integer);
+  if (value.null) result.setNull();
+  else if (type == ValueType::Integer) result.setInt32(value.integer);
   else if (type == ValueType::Boolean) result.setBoolean(value.boolean);
   else if (type == ValueType::Number) result.setDouble(value.number);
   else {

@@ -292,7 +292,8 @@ bool State::Baseline() {
   return true;
 }
 bool Environment::Configure(JS::HandleObject profile) {
-  return state_->Baseline() && state_->Apply(profile, false);
+  return state_->Baseline() && state_->Apply(profile, false) &&
+         state_->RefreshDeviceMemory();
 }
 bool Environment::Defaults(JS::MutableHandleValue result) {
   return state_->Baseline() && ParseBaseline(state_->cx, result);

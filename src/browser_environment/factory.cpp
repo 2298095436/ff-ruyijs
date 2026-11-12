@@ -8,6 +8,7 @@
 #include "js/Wrapper.h"
 #include "js/Object.h"
 #include "js/PropertyAndElement.h"
+#include "js/Realm.h"
 #include "js/Symbol.h"
 #include "js/String.h"
 #include <iterator>
@@ -63,6 +64,18 @@ bool State::Accessor(JS::HandleObject target, const char* name, int32_t slot,
   }
   return get && JS_DefineProperty(cx, target, name, get, set, attrs);
 }
+bool State::RefreshDeviceMemory() {
+  if (!navigatorPrototype.get()) return true;
+  JSAutoRealm realm(cx, page);
+  FieldValue value;
+  bool secure = false;
+  if (!(shared ? shared->model : model).Read(Kind::Navigator, kNavigatorDeviceMemory, &value) ||
+      !ReadSecureContext(&secure)) return false;
+  JS::RootedObject prototype(cx, navigatorPrototype);
+  if (value.null || !secure) return JS_DeleteProperty(cx, prototype, "deviceMemory");
+  return Accessor(prototype, "deviceMemory", int32_t(kNavigatorDeviceMemory),
+                  JSPROP_ENUMERATE, Getter);
+}
 bool State::Instance(Kind kind, JS::HandleObject parent) {
   const JSClass* klass = ClassFor(kind, worker);
   const bool windowLocation = kind == Kind::Location && !worker;
@@ -91,6 +104,7 @@ bool State::Instance(Kind kind, JS::HandleObject parent) {
   unsigned attrs = JSPROP_ENUMERATE | (windowLocation ? JSPROP_PERMANENT : 0);
   for (size_t index = 0; index < count; ++index) {
     if (worker && kind == Kind::Navigator && !fields[index].worker) continue;
+    if (kind == Kind::Navigator && index == kNavigatorDeviceMemory) continue;
     // Location is the one unforgeable interface: href and the six URL
     // components are writable, origin is not.
     JSNative setter = windowLocation && index < 8 ? LocationSetter : nullptr;
@@ -109,7 +123,8 @@ bool State::Instance(Kind kind, JS::HandleObject parent) {
     if (!instances.get().append(nullptr)) { JS_ReportOutOfMemory(cx); return false; }
   }
   instances.get()[size_t(kind)] = object;
-  return JS_DefineProperty(cx, page, klass->name, constructor, 0) &&
+  return (kind != Kind::Navigator || RefreshDeviceMemory()) &&
+         JS_DefineProperty(cx, page, klass->name, constructor, 0) &&
          helpers->Interface(klass->name, target) && helpers->Object(klass->name, prototype) &&
          helpers->Constructor(klass->name, constructor);
 }

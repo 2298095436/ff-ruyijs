@@ -22,6 +22,8 @@ struct Model::Impl {
   bool pdf_viewer_enabled = true;
   bool online = true;
   bool global_privacy_control = false;
+  bool device_memory_present = false;
+  double device_memory = 0;
   // kScreenFields 8/9 (screen.top / screen.left). One primary screen sits at the
   // origin, so the default is 0/0; profiles/firefox-environment.json sets them
   // through the same validated screen group as every other Screen field.

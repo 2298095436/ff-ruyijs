@@ -257,10 +257,76 @@ def runtime_cases():
         [('https://fixture.test/assets/images/pixel.svg',svg,'image/svg+xml')])
     return cases
 
+def device_memory_checks(Context):
+    checks = {}
+    def record(name, actual, expected):
+        checks[name] = dict(passed=actual == expected, actual=actual, expected=expected)
+    with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+        ctx.load_page('https://fixture.test/', '')
+        record('memory_default_absent', ctx.eval(
+            '({present:"deviceMemory" in navigator,own:Object.hasOwn(Navigator.prototype,"deviceMemory")})'),
+            dict(present=False, own=False))
+    with Context(timeout=30, mode='debug', proxy='http://127.0.0.1:9') as ctx:
+        configured = ctx.configure_environment({'navigator':{'deviceMemory':16}})
+        record('memory_configuration_reflected', configured['navigator']['deviceMemory'], 16)
+        ctx.load_page('https://fixture.test/', '<iframe></iframe>')
+        record('memory_native_descriptor', ctx.eval("""(() => {
+            const d=Object.getOwnPropertyDescriptor(Navigator.prototype,'deviceMemory');
+            let invalid=false;try{d.get.call({});}catch(e){invalid=e instanceof TypeError;}
+            return {value:navigator.deviceMemory,type:typeof navigator.deviceMemory,
+                own:Object.hasOwn(navigator,'deviceMemory'),getter:typeof d.get,
+                setter:typeof d.set,enumerable:d.enumerable,configurable:d.configurable,
+                native:Function.prototype.toString.call(d.get).includes('[native code]'),invalid};
+        })()"""), dict(value=16,type='number',own=False,getter='function',setter='undefined',
+                     enumerable=True,configurable=True,native=True,invalid=True))
+        record('memory_frame_inheritance', ctx.eval(
+            'document.querySelector("iframe").contentWindow.navigator.deviceMemory'),16)
+        ctx.eval("""window.memoryWorker=null;
+            const u=URL.createObjectURL(new Blob([
+              'const d=Object.getOwnPropertyDescriptor(WorkerNavigator.prototype,"deviceMemory");'
+              +'let invalid=false;try{d.get.call({});}catch(e){invalid=e instanceof TypeError;}'
+              +'postMessage({value:navigator.deviceMemory,native:d.get.toString().includes("[native code]"),invalid});'
+            ],{type:'application/javascript'}));
+            const w=new Worker(u);w.onmessage=e=>{memoryWorker=e.data;w.terminate();URL.revokeObjectURL(u);};""")
+        for _ in range(50):
+            ctx.advance(20,max_tasks=2000)
+            worker=ctx.eval('window.memoryWorker')
+            if worker is not None: break
+        record('memory_worker_inheritance',worker,dict(value=16,native=True,invalid=True))
+        record('memory_api_observed', any(x.get('p')=='Navigator.deviceMemory'
+            for x in ctx.peek_api_log()),True)
+        ctx.put_resource('https://next.fixture.test/', '<title>successor</title>',
+            headers=[['Content-Type','text/html']])
+        ctx.navigate('https://next.fixture.test/')
+        record('memory_navigation_inheritance',ctx.eval('navigator.deviceMemory'),16)
+    with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+        ctx.configure_environment({'navigator':{'deviceMemory':0.5}})
+        record('memory_fractional_gib',ctx.eval('navigator.deviceMemory'),0.5)
+    with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+        ctx.configure_environment({'navigator':{'deviceMemory':16}})
+        rejected=[]
+        for value in [0,-1,129,'16',False]:
+            try: ctx.configure_environment({'navigator':{'deviceMemory':value}})
+            except Exception: rejected.append(value)
+        state=ctx.configure_environment({'navigator':{'language':'zh-CN'}})
+        record('memory_invalid_configuration_atomic',
+            dict(rejected=len(rejected),value=state['navigator']['deviceMemory']),
+            dict(rejected=5,value=16))
+        ctx.configure_environment({'navigator':{'deviceMemory':None}})
+        record('memory_explicit_disable',ctx.eval('"deviceMemory" in navigator'),False)
+    with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+        ctx.configure_environment({'navigator':{'deviceMemory':16}})
+        ctx.load_page('http://insecure.fixture.test/','')
+        record('memory_secure_context_gate',ctx.eval(
+            '({secure:isSecureContext,present:"deviceMemory" in navigator})'),
+            dict(secure=False,present=False))
+    return checks
+
+
 CONFIG = {'navigator': {'userAgent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:158.0) Gecko/20100101 Firefox/158.0', 'appVersion': '5.0 (Windows)', 'platform': 'Win32', 'language': 'en-US', 'languages': ['en-US', 'en'], 'hardwareConcurrency': 12, 'maxTouchPoints': 0}, 'screen': {'width': 1366, 'height': 768, 'availWidth': 1366, 'availHeight': 720, 'availLeft': 0, 'availTop': 0, 'colorDepth': 24, 'pixelDepth': 24}, 'viewport': {'width': 1360, 'height': 876, 'devicePixelRatio': 1}, 'locale': {'timezone': 'Asia/Shanghai', 'osLocale': 'en-US'}}
 
 def main():
-    checks = {}
+    checks = device_memory_checks(Context)
     for name, script, expected, html, resources, settle in runtime_cases():
         try:
             with Context(timeout=30, proxy='http://127.0.0.1:9', tls='158', environment=CONFIG) as ctx:

@@ -46,12 +46,15 @@ inline constexpr Field kNavigatorFields[] = {
   {"oscpu", ValueType::String}, {"buildID", ValueType::String},
   {"doNotTrack", ValueType::String}, {"pdfViewerEnabled", ValueType::Boolean},
   {"onLine", ValueType::Boolean, true},
-  {"globalPrivacyControl", ValueType::Boolean, true}
+  {"globalPrivacyControl", ValueType::Boolean, true},
+  // null keeps the Firefox default: no deviceMemory member.
+  {"deviceMemory", ValueType::Number, true, true}
 };
 // Index of maxTouchPoints in kNavigatorFields. State::TouchCapable reads it via
 // Model::Read; keep it in sync with the array order above (the five Firefox
 // traits above are appended after it, so this index never moves).
 inline constexpr uint32_t kNavigatorMaxTouchPoints = 12;
+inline constexpr uint32_t kNavigatorDeviceMemory = 21;
 inline constexpr Field kScreenFields[] = {
   {"width", ValueType::Integer}, {"height", ValueType::Integer},
   {"availWidth", ValueType::Integer}, {"availHeight", ValueType::Integer},

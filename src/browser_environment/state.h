@@ -295,6 +295,7 @@ struct State final {
   bool Globals();
   bool WindowMembers();
   bool NavigatorPlatformMembers();
+  bool RefreshDeviceMemory();
   bool NavigatorLegacyMembers();
   friend bool ThrowDOM(State& state, const char* name, const char* message);
   bool Window(JS::HandleObject eventPrototype);

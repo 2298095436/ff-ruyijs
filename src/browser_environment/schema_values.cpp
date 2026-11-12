@@ -63,6 +63,9 @@ bool ReadField(JSContext* cx, JS::HandleValue value, Kind kind, uint32_t field,
     return kind != Kind::Location || ValidURL(cx, result->text);
   }
   if (type == ValueType::Number) {
+    if (kind == Kind::Navigator && field == kNavigatorDeviceMemory && value.isNull()) {
+      result->null = true; return true;
+    }
     // The geolocation group: optional members (altitude onward) accept null.
     if (value.isNull() && kind == Kind::Geolocation && descriptor.nullable) {
       result->null = true;
@@ -71,6 +74,9 @@ bool ReadField(JSContext* cx, JS::HandleValue value, Kind kind, uint32_t field,
     if (!value.isNumber() || !std::isfinite(value.toNumber()))
       return Error(cx, "Environment field must be a finite number");
     result->number = value.toNumber();
+    if (kind == Kind::Navigator && field == kNavigatorDeviceMemory &&
+        (result->number <= 0 || result->number > 128))
+      return Error(cx, "deviceMemory must be greater than 0 and at most 128", JSEXN_RANGEERR);
     // devicePixelRatio is a positive CSS pixel ratio; Firefox never reports 0
     // and no desktop display ratio exceeds 8.
     if (kind == Kind::Viewport && field == kViewportDevicePixelRatio &&

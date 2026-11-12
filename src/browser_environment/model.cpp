@@ -80,6 +80,9 @@ bool Model::Read(Kind kind, uint32_t field, FieldValue* result) const noexcept {
         case 18: result->boolean = impl_->pdf_viewer_enabled; break;
         case 19: result->boolean = impl_->online; break;
         case 20: result->boolean = impl_->global_privacy_control; break;
+        case kNavigatorDeviceMemory:
+          result->null = !impl_->device_memory_present;
+          result->number = impl_->device_memory; break;
         default: return false;
       }
     } else if (kind == Kind::Screen) {
