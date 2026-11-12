@@ -1,4 +1,5 @@
 #include "domain/styling/css_box_value.h"
+#include "domain/styling/css_background_value.h"
 #include "domain/styling/css_flex_value.h"
 #include "domain/styling/css_overflow_value.h"
 #include "domain/styling/css_components.h"
@@ -44,6 +45,7 @@ std::string BoxLength(std::string value) {
 }
 }
 bool CssBoxShorthand(std::string_view name) {
+  if (name == "background" || name == "background-position") return true;
   if (CssFlexShorthand(name) || CssOverflowShorthand(name)) return true;
   if (name == "margin" || name == "padding" || name == "inset" || name == "border" ||
       name == "border-width" || name == "border-style" || name == "border-color") return true;
@@ -51,6 +53,8 @@ bool CssBoxShorthand(std::string_view name) {
          name == "border-bottom" || name == "border-left";
 }
 std::vector<std::string> CssBoxLonghands(std::string_view name) {
+  if (name == "background-position") return {"background-position-x", "background-position-y"};
+  if (name == "background") return CssBackgroundLonghands();
   std::vector<std::string> result;
   if (CssFlexShorthand(name)) return CssFlexLonghands(name);
   if (CssOverflowShorthand(name)) return {"overflow-x", "overflow-y"};
@@ -70,6 +74,8 @@ std::vector<std::string> CssBoxLonghands(std::string_view name) {
 }
 bool CssBoxExpand(const std::string& name, const std::string& input, bool important,
                   std::vector<CssDeclarationValue>* out) {
+  if (name == "background") return CssBackgroundExpand(input, important, out);
+  if (name == "background-position") return CssBackgroundPositionExpand(input, important, out);
   if (CssFlexShorthand(name)) return CssFlexExpand(name, input, important, out);
   if (CssOverflowShorthand(name)) return CssOverflowExpand(input, important, out);
   const auto names = CssBoxLonghands(name);

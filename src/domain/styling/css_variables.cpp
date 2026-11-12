@@ -132,6 +132,15 @@ void CssResolveVariables(StyleDeclaration& result, const std::map<std::string, u
     const bool important = result.get_property_priority(name);
     std::string value;
     const bool ok = Substitute(raw, final_lookup, &value, 0);
+    const auto pending = rules.pending_backgrounds.find(name);
+    if (pending != rules.pending_backgrounds.end()) {
+      std::vector<CssDeclarationValue> expanded;
+      if (ok) expanded = CssDeclarations(pending->second + ":" + value);
+      const auto row = std::find_if(expanded.begin(),expanded.end(),[&](const auto& r){return r.name==name;});
+      if (row != expanded.end()) result.set_property(name,row->value,important);
+      else unset(name);
+      continue;
+    }
     const bool shorthand = CssBoxShorthand(name) || name == "font";
     if (!shorthand) {
       if (ok) result.set_property(name, value, important);

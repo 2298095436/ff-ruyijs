@@ -13,7 +13,7 @@ namespace {
 // PropertyDeclarationBlock::to_css): border (17), border-image (5), the four-
 // side border-width/style/color (4), then the per-side border-top... (3).
 constexpr const char* kShorthands[] = {
-  "font", "border", "border-image", "border-width", "border-style", "border-color",
+  "background", "background-position", "font", "border", "border-image", "border-width", "border-style", "border-color",
   "border-top", "border-right", "border-bottom", "border-left", "margin", "padding", "inset",
   "flex", "flex-flow", "gap", "overflow"};
 constexpr const char* kBorderImage[] = {"border-image-source", "border-image-slice",

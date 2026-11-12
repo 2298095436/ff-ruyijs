@@ -1,10 +1,13 @@
 #include "domain/styling/css_box_value.h"
+#include "domain/styling/css_background_value.h"
 #include "domain/styling/css_flex_value.h"
 #include "domain/styling/css_overflow_value.h"
 #include <algorithm>
 namespace ruyijs::domain::styling {
 std::string CssBoxSerialize(const std::vector<CssDeclarationValue>& rows,
                             const std::string& name, bool* important) {
+  if (name == "background") return CssBackgroundSerialize(rows, important);
+  if (name == "background-position") return CssBackgroundPositionSerialize(rows, important);
   if (CssFlexShorthand(name)) return CssFlexSerialize(rows, name, important);
   if (CssOverflowShorthand(name)) return CssOverflowSerialize(rows, important);
   const auto names = CssBoxLonghands(name);

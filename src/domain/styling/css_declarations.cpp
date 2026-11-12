@@ -3,6 +3,7 @@
 #include "domain/styling/css_numeric_value.h"
 #include "domain/styling/css_font_value.h"
 #include "domain/styling/css_box_value.h"
+#include "domain/styling/css_background_value.h"
 #include "domain/styling/css_page_value.h"
 #include "domain/styling/css_specified_value.h"
 #include <algorithm>
@@ -76,8 +77,23 @@ std::vector<CssDeclarationValue> Parse(const std::string& text,CssDeclarationCon
     if(context==CssDeclarationContext::Page) {if(!CssPageExpand(name,value,important,&expanded)) continue;}
     else if(name=="font") { if(!CssFontExpand(value,important,&expanded)) continue; }
     else if(CssBoxShorthand(name)) { if(!CssBoxExpand(name,value,important,&expanded)) continue; }
+    else if(CssBackgroundProperty(name)&&!CssBackgroundLonghand(name,value)) continue;
     else expanded.push_back({std::move(name),std::move(value),important});
+    if(context==CssDeclarationContext::Standard && (name=="background" || name=="background-position")) {
+      const auto keys=CssBoxLonghands(name);
+      const bool pending=expanded.size()==1 && expanded[0].name==name;
+      result.erase(std::remove_if(result.begin(),result.end(),[&](const auto& old){
+        if (old.important && !important) return false;
+        return old.name==name || (pending && std::find(keys.begin(),keys.end(),old.name)!=keys.end());
+      }),result.end());
+    }
     for(auto& row:expanded) {
+      bool protectedByPending=false;
+      if (!row.important && CssBackgroundProperty(row.name))
+        for (const auto& old:result)
+          if (old.important && (old.name=="background" || (old.name=="background-position" &&
+              (row.name=="background-position-x" || row.name=="background-position-y")))) protectedByPending=true;
+      if (protectedByPending) continue;
       if(context==CssDeclarationContext::Standard) row.value=CssSpecifiedValue(row.name,row.value);
       // PropertyDeclarationBlock::push (parsing): a repeated property replaces
       // the earlier declaration by removing it and appending the new one,
@@ -119,6 +135,7 @@ std::string CssSetDeclaration(std::string& block,const std::string& inputName,
   if(found!=rows.end()) old=found->value;
   if(remove||value.empty()) { if(found!=rows.end()) rows.erase(found); }
   else if(!CssKnownProperty(name)) return old;
+  else if(CssBackgroundProperty(name)&&!CssBackgroundLonghand(name,value)) return old;
   else if(found==rows.end()) rows.push_back({name,CssSpecifiedValue(name,DeclarationValue(name,value)),important});
   else { found->value=CssSpecifiedValue(name,DeclarationValue(name,value));found->important=important; }
   }

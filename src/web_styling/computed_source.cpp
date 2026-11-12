@@ -1,5 +1,6 @@
 #include "domain/styling/stylesheet.h"
 #include "domain/styling/css_color_value.h"
+#include "domain/styling/css_background_value.h"
 #include "web_styling/internal.h"
 #include "web_styling/adopted.h"
 #include "web_styling/selector_input.h"
@@ -50,7 +51,11 @@ void ComputeColors(ComputedStyle* style) {
   for (const auto& [name, value] : style->values)
     if (name == "color") current = ruyijs::domain::styling::CssComputedColor(value, {});
   for (auto& [name, value] : style->values) {
-    if (!ColorProperty(name)) continue;
+    if (!ColorProperty(name)) {
+      if (name == "background-position-x" || name == "background-position-y" || name == "background-image")
+        value = css::CssBackgroundComputed(name, value, current);
+      continue;
+    }
     std::string computed = ruyijs::domain::styling::CssComputedColor(value, current);
     if (!computed.empty()) value = std::move(computed);
   }

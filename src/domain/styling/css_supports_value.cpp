@@ -4,6 +4,7 @@
 #include "domain/styling/css_numeric_value.h"
 #include "domain/styling/stylesheet.h"
 #include "domain/styling/css_box_value.h"
+#include "domain/styling/css_background_value.h"
 #include <algorithm>
 namespace ruyijs::domain::styling {
 namespace {
@@ -210,7 +211,7 @@ bool CssSupportsProperty(const std::string& property,const std::string& input) {
   if(name=="float") return Keyword(lower,"none,left,right,inline-start,inline-end");
   if(name=="clear") return Keyword(lower,"none,left,right,both,inline-start,inline-end");
   if(name.find("-style")!=name.npos) return Keyword(lower,"none,hidden,dotted,dashed,solid,double,groove,ridge,inset,outset");
-  if(name=="background-image") return lower=="none";
+  if(name.starts_with("background-")) return CssBackgroundLonghand(name,input);
   if(name=="cursor") return Keyword(lower,"auto,default,none,context-menu,help,pointer,progress,wait,cell,crosshair,text,vertical-text,alias,copy,move,no-drop,not-allowed,grab,grabbing,all-scroll,col-resize,row-resize,n-resize,e-resize,s-resize,w-resize,ne-resize,nw-resize,se-resize,sw-resize,ew-resize,ns-resize,nesw-resize,nwse-resize,zoom-in,zoom-out");
   // Modern property grammars (the surface Firefox 159 answers CSS.supports
   // with; text-wrap:pretty, line-clamp and interpolate-size are not shipped

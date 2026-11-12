@@ -17,6 +17,7 @@ struct CssVariableRules {
   std::function<bool(const std::string&)> inherited;
   std::function<std::string(const std::string&)> initial;
   const StyleDeclaration* parent = nullptr;
+  std::map<std::string, std::string> pending_backgrounds;
 };
 // Resolves |result| in place. |order| is each declared property's cascade
 // order, so a longhand declared after a var()-bearing shorthand keeps its own

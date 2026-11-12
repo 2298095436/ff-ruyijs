@@ -78,6 +78,129 @@ def runtime_cases():
       '<b style="visibility:visible">Shown</b></span></div>')
     check('inner_text_preserves_preformatted','document.querySelector("#box").innerText','  A\n B  ',
       '<title>Fixture</title><div id="box" style="white-space:pre">  A\n B  </div>')
+    # Expected CSSOM values are checked against the isolated Firefox control;
+    # all image resources are data URLs and need no external transport.
+    image = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=='
+    image_url = 'url("' + image + '")'
+    setup = 'const e=document.createElement("div");document.body.append(e);const s=e.style;'
+    def background(name, body, expected, html='<title>Fixture</title>'):
+        check('background_' + name, '(()=>{' + setup + body + '})()', expected, html)
+    background('data_uri_shorthand', 's.background=' + json.dumps('url(' + image + ') center / cover') + ';'
+        'const c=getComputedStyle(e);return [s.backgroundImage,c.backgroundImage,s.backgroundSize,c.backgroundPosition];',
+        [image_url,image_url,'cover','50% 50%'])
+    background('resets_longhands',
+        's.cssText="background-color:red;background-image:linear-gradient(red,blue);background-position:bottom right;'
+        'background-size:12px 13px;background-repeat:no-repeat;background-attachment:fixed;'
+        'background-origin:content-box;background-clip:padding-box";s.background="none";'
+        'const c=getComputedStyle(e);return [c.backgroundImage,c.backgroundColor,c.backgroundPosition,'
+        'c.backgroundSize,c.backgroundRepeat,c.backgroundAttachment,c.backgroundOrigin,c.backgroundClip];',
+        ['none','rgba(0, 0, 0, 0)','0% 0%','auto','repeat','scroll','padding-box','border-box'])
+    background('declaration_order',
+        's.cssText="background:red;background-color:blue";const a=getComputedStyle(e).backgroundColor;'
+        's.cssText="background-color:blue;background:red";return [a,getComputedStyle(e).backgroundColor];',
+        ['rgb(0, 0, 255)','rgb(255, 0, 0)'])
+    background('important_cascade',
+        's.cssText="background:red!important;background-color:blue";const a=getComputedStyle(e).backgroundColor;'
+        's.cssText="background-color:blue!important;background:red";const b=getComputedStyle(e).backgroundColor;'
+        's.setProperty("background","green");return [a,b,getComputedStyle(e).backgroundColor,'
+        's.getPropertyPriority("background-color")];',
+        ['rgb(255, 0, 0)','rgb(0, 0, 255)','rgb(0, 128, 0)',''])
+    background('stylesheet_cascade',
+        'e.className="bg";s.backgroundColor="blue";const c=getComputedStyle(e);'
+        'return [c.backgroundImage,c.backgroundColor,c.backgroundSize];',
+        [image_url,'rgb(255, 0, 0)','cover'],
+        '<title>Fixture</title><style>.bg{background:url(' + image + ') center/cover red!important}</style>')
+    background('multilayer_and_commas',
+        's.background=' + json.dumps('url(' + image + ') left top / 10px 20px no-repeat padding-box content-box, '
+        'linear-gradient(red, blue) right bottom / contain fixed #010203') + ';'
+        'const c=getComputedStyle(e);return [s.backgroundImage,c.backgroundImage,c.backgroundSize,'
+        'c.backgroundPosition,c.backgroundRepeat,c.backgroundAttachment,c.backgroundOrigin,c.backgroundClip,c.backgroundColor];',
+        [image_url + ', linear-gradient(red, blue)', image_url + ', linear-gradient(rgb(255, 0, 0), rgb(0, 0, 255))',
+         '10px 20px, contain','0% 0%, 100% 100%','no-repeat, repeat','scroll, fixed',
+         'padding-box, padding-box','content-box, border-box','rgb(1, 2, 3)'])
+    background('remove_and_roundtrip',
+        's.background=' + json.dumps('url(' + image + ') center/cover no-repeat red') + ';'
+        'const other=document.createElement("div");document.body.append(other);other.style.cssText=s.cssText;'
+        'const c=getComputedStyle(other);const before=[c.backgroundImage,c.backgroundSize,c.backgroundColor];'
+        'const old=s.removeProperty("background");return {before,returned:old.length>0,empty:s.cssText==="",'
+        'longhandsEmpty:["image","size","color","repeat"].every(p=>s.getPropertyValue("background-"+p)==="")};',
+        {'before':[image_url,'cover','rgb(255, 0, 0)'],'returned':True,'empty':True,'longhandsEmpty':True})
+    background('invalid_preserves_value',
+        's.background="blue";const original=s.cssText;'
+        'return ["left right","red blue","url(a) url(b)","center / -1px","center / cover contain",'
+        '"red, none","none,","/ cover","repeat-x no-repeat","left top right",'
+        '"center red top","center no-repeat / cover"].map(v=>{s.background=v;return s.cssText===original});',
+        [True]*12)
+    background('variables_and_order',
+        's.cssText="--bg:red;background:var(--bg);background-color:blue";const a=getComputedStyle(e).backgroundColor;'
+        's.cssText="--bg:red;background-color:blue;background:var(--bg)";const b=getComputedStyle(e).backgroundColor;'
+        's.cssText="--bg:red;background:var(--bg)!important;background-color:blue";const c=getComputedStyle(e).backgroundColor;'
+        's.cssText="background:var(--missing,green)";const d=getComputedStyle(e).backgroundColor;'
+        's.cssText="background:var(--missing);background-color:blue";return [a,b,c,d,getComputedStyle(e).backgroundColor];',
+        ['rgb(0, 0, 255)','rgb(255, 0, 0)','rgb(255, 0, 0)','rgb(0, 128, 0)','rgb(0, 0, 255)'])
+    background('position_and_size',
+        'return ["center", "top", "right bottom", "top left", "right 12px bottom 8px",'
+        '"bottom 8px right 12px", "center top 8px", "10% 20% / 30px auto"].map(v=>{'
+        's.background="none "+v;const c=getComputedStyle(e);return [s.backgroundPosition,c.backgroundPosition,s.backgroundSize]});',
+        [['center center','50% 50%','auto'],['center top','50% 0%','auto'],
+         ['right bottom','100% 100%','auto'],['left top','0% 0%','auto'],
+         ['right 12px bottom 8px','calc(100% - 12px) calc(100% - 8px)','auto'],
+         ['right 12px bottom 8px','calc(100% - 12px) calc(100% - 8px)','auto'],
+         ['center top 8px','50% 8px','auto'],['10% 20%','10% 20%','30px auto']])
+    background('position_longhand_override',
+        's.background="none center / cover";s.backgroundPosition="right bottom";'
+        'const a=getComputedStyle(e).backgroundPosition;s.backgroundPositionX="10px";'
+        'return [a,getComputedStyle(e).backgroundPosition,s.backgroundPosition,s.backgroundSize];',
+        ['100% 100%','10px 100%','10px bottom','cover'])
+    background('comments_and_keyword_case',
+        's.background="NONE /**/ CENTER /**/ / /**/ COVER /**/ NO-REPEAT /**/ RED";'
+        'const c=getComputedStyle(e);return [c.backgroundImage,c.backgroundPosition,c.backgroundSize,c.backgroundRepeat,c.backgroundColor];',
+        ['none','50% 50%','cover','no-repeat','rgb(255, 0, 0)'])
+    background('wide_keywords',
+        'document.body.style.background="red center/cover no-repeat";'
+        'return ["inherit","initial","unset"].map(v=>{s.background=v;const c=getComputedStyle(e);'
+        'return [c.backgroundColor,c.backgroundPosition,c.backgroundSize,c.backgroundRepeat]});',
+        [['rgb(255, 0, 0)','50% 50%','cover','no-repeat'],
+         ['rgba(0, 0, 0, 0)','0% 0%','auto','repeat'],
+         ['rgba(0, 0, 0, 0)','0% 0%','auto','repeat']])
+    background('supports_grammars',
+        'return {valid:["none","url(data:image/gif;base64,AA==) center/cover","linear-gradient(red,blue) no-repeat",'
+        '"left 10px top 20px / 3px 4px red","var(--bg)"].map(v=>CSS.supports("background",v)),'
+        'invalid:["bogus","red, none","center / -1px","none,","left right"].map(v=>CSS.supports("background",v)),'
+        'images:["none","url(data:image/gif;base64,AA==)","linear-gradient(red,blue)",'
+        '"none, url(a)","nonsense", "url(a) url(b)","url(a),"].map(v=>CSS.supports("background-image",v))};',
+        {'valid':[True]*5,'invalid':[False]*5,'images':[True]*4+[False]*3})
+    background('size_defaults_and_comments',
+        'return ["center/30px","center/30px auto","center/auto auto","center/auto 30px",'
+        '"center/0","none/**/center"].map(v=>{s.background=v;const c=getComputedStyle(e);'
+        'return [s.backgroundPosition,s.backgroundSize,c.backgroundSize]});',
+        [['center center','30px auto','30px auto'],['center center','30px auto','30px auto'],
+         ['center center','auto','auto'],['center center','auto 30px','auto 30px'],
+         ['center center','0px auto','0px auto'],['center center','auto','auto']])
+    background('supports_invalid_images',
+        'return ["linear-gradient()","url(a b)","image(x)","cross-fade(url(a),url(b),50%)",'
+        '"element(#a)","-moz-element(#a)","linear-gradient(red)","image-set(url(a) 1x)",'
+        '"top 10px","10px left","center left 10px"].map(v=>CSS.supports("background",v));',
+        [False,False,False,False,False,True,True,True,False,False,True])
+    background('variable_priority_in_both_orders',
+        'return ["--bg:red;background:var(--bg)!important;background-color:blue",'
+        '"--bg:red;background-color:blue!important;background:var(--bg)",'
+        '"--bg:red;background:var(--bg);background-color:blue!important"].map(v=>{'
+        's.cssText=v;return getComputedStyle(e).backgroundColor});',
+        ['rgb(255, 0, 0)','rgb(0, 0, 255)','rgb(0, 0, 255)'])
+    background('variable_selector_specificity',
+        'e.id="bg";e.className="later";const a=getComputedStyle(e).backgroundColor;'
+        's.backgroundColor="green";return [a,getComputedStyle(e).backgroundColor];',
+        ['rgb(255, 0, 0)','rgb(0, 128, 0)'],
+        '<title>Fixture</title><style>body{--bg:red}#bg{background:var(--bg)}.later{background-color:blue}</style>')
+    background('variable_specified_getters',
+        'return ["--bg:red;background:var(--bg)!important;background-color:blue",'
+        '"--bg:red;background:var(--bg);background-color:blue",'
+        '"--bg:red;background-color:blue;background:var(--bg)",'
+        '"--bg:red;background:var(--bg)!important;background:blue"].map(v=>{'
+        's.cssText=v;return [s.background,s.backgroundColor,getComputedStyle(e).backgroundColor]});',
+        [['var(--bg)','','rgb(255, 0, 0)'],['','blue','rgb(0, 0, 255)'],
+         ['var(--bg)','','rgb(255, 0, 0)'],['var(--bg)','','rgb(255, 0, 0)']])
     return cases
 
 CONFIG = {'navigator': {'userAgent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:158.0) Gecko/20100101 Firefox/158.0', 'appVersion': '5.0 (Windows)', 'platform': 'Win32', 'language': 'en-US', 'languages': ['en-US', 'en'], 'hardwareConcurrency': 12, 'maxTouchPoints': 0}, 'screen': {'width': 1366, 'height': 768, 'availWidth': 1366, 'availHeight': 720, 'availLeft': 0, 'availTop': 0, 'colorDepth': 24, 'pixelDepth': 24}, 'viewport': {'width': 1360, 'height': 876, 'devicePixelRatio': 1}, 'locale': {'timezone': 'Asia/Shanghai', 'osLocale': 'en-US'}}

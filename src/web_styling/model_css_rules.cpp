@@ -12,6 +12,7 @@
 #include "domain/styling/css_font_value.cpp"
 #include "domain/styling/css_font_serialization.cpp"
 #include "domain/styling/css_font_computed.cpp"
+#include "domain/styling/css_background_value.cpp"
 #include "domain/styling/css_box_value.cpp"
 #include "domain/styling/css_box_serialization.cpp"
 #include "domain/styling/css_flex_value.cpp"

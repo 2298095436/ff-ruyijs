@@ -591,12 +591,16 @@ public:
                     if (!selector.matches(element)) continue;
                     for (const auto& authored : rule.properties()) {
                       physical.clear();
-                      if (!CssPhysicalDeclarations(authored.name, authored.value, &physical))
+                      if (authored.name == "background" || authored.name == "background-position") {
+                        for (const auto& key : CssBoxLonghands(authored.name)) physical.push_back({key,authored.value});
+                      } else if (!CssPhysicalDeclarations(authored.name, authored.value, &physical))
                         physical.push_back({authored.name, authored.value});
                       for (const auto& [physical_name, physical_value] : physical) {
                         CssProperty prop{physical_name, physical_value, authored.important};
                         Candidate candidate;
                         candidate.value = prop.value;
+                        if (authored.name == "background" || authored.name == "background-position")
+                          candidate.pending_background = authored.name;
                         candidate.important = prop.important;
                         candidate.a = selector.specificity_a();
                         candidate.b = selector.specificity_b();
@@ -613,11 +617,15 @@ public:
         if (!element.inline_style.empty()) {
             for (const auto& entry : CssDeclarations(element.inline_style)) {
                 physical.clear();
-                if (!CssPhysicalDeclarations(entry.name, entry.value, &physical))
+                if (entry.name == "background" || entry.name == "background-position") {
+                  for (const auto& key : CssBoxLonghands(entry.name)) physical.push_back({key,entry.value});
+                } else if (!CssPhysicalDeclarations(entry.name, entry.value, &physical))
                     physical.push_back({entry.name, entry.value});
                 for (const auto& [physical_name, physical_value] : physical) {
                     Candidate candidate;
                     candidate.value = physical_value;
+                    if (entry.name == "background" || entry.name == "background-position")
+                      candidate.pending_background = entry.name;
                     candidate.important = entry.important;
                     candidate.inline_origin = true;
                     candidate.order = order++;
@@ -679,12 +687,15 @@ public:
             }
             break;
         }
+        std::map<std::string, std::string> pending_backgrounds;
+        for (const auto& entry : winners)
+          if (!entry.second.pending_background.empty()) pending_backgrounds[entry.first] = entry.second.pending_background;
         std::map<std::string, uint64_t> declared;
         for (const auto& entry : winners) declared[entry.first] = entry.second.order;
         CssResolveVariables(result, declared,
                             {[](const std::string& name) { return is_inherited(name); },
                              [](const std::string& name) { return initial_value(name); },
-                             has_parent ? &parent_style : nullptr});
+                             has_parent ? &parent_style : nullptr, pending_backgrounds});
         CssComputeFont(result, parent_style, parent_style.root_font_size);
         result.root_font_size = has_parent ? parent_style.root_font_size : result.computed_font_size;
         unsigned side_index = 0;
@@ -832,6 +843,7 @@ private:
     }
     struct Candidate {
         std::string value;
+        std::string pending_background;
         bool important = false;
         bool inline_origin = false;
         int a = 0, b = 0, c = 0;
@@ -864,6 +876,10 @@ private:
           std::map<std::string, std::string> values = {
             {"display", "inline"}, {"color", "rgb(0, 0, 0)"},
             {"background-color", "rgba(0, 0, 0, 0)"}, {"background-image", "none"},
+            {"background-position-x", "0%"}, {"background-position-y", "0%"},
+            {"background-size", "auto"}, {"background-repeat", "repeat"},
+            {"background-attachment", "scroll"}, {"background-origin", "padding-box"},
+            {"background-clip", "border-box"},
             {"width", "auto"}, {"height", "auto"}, {"min-width", "auto"}, {"min-height", "auto"},
             {"max-width", "none"}, {"max-height", "none"},
             {"box-sizing", "content-box"}, {"margin-top", "0px"}, {"margin-right", "0px"},
