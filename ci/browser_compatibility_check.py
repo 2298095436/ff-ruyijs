@@ -338,6 +338,64 @@ def device_memory_checks(Context):
             try:ctx.configure_environment(group)
             except Exception:rejected.append(True)
         record('webgl_and_language_list_bounds',len(rejected),2)
+    checks.update(graphics_profile_checks(Context))
+    return checks
+
+def graphics_profile_checks(Context):
+    import json
+    checks = {}
+    def record(name, actual, expected):
+        checks[name] = dict(passed=actual == expected, actual=actual, expected=expected)
+    read = """(() => {
+        const canvas=typeof document==='object'?document.createElement('canvas'):new OffscreenCanvas(4,4);
+        const g=canvas.getContext('webgl'),d=g.getExtension('WEBGL_debug_renderer_info');
+        return {vendor:g.getParameter(g.VENDOR),renderer:g.getParameter(d.UNMASKED_RENDERER_WEBGL),
+            limit:g.getParameter(g.MAX_VERTEX_UNIFORM_VECTORS),extensions:g.getSupportedExtensions()};
+    })()"""
+    expected=dict(vendor='WebKit',renderer='YSbrowser measured Intel fixture',limit=4096,
+        extensions=['EXT_clip_control','WEBGL_debug_renderer_info'])
+    with Context(timeout=30,proxy='http://127.0.0.1:9') as ctx:
+        ctx.configure_environment({'webgl':{'vendor':expected['vendor'],
+            'unmaskedRenderer':expected['renderer'],'limits':{'36347':expected['limit']},
+            'extensions':expected['extensions']}})
+        ctx.put_resource('https://child.fixture.test/','<iframe></iframe>',
+            headers=[['Content-Type','text/html']])
+        ctx.load_page('https://fixture.test/','<iframe></iframe><iframe src="https://child.fixture.test/"></iframe>')
+        record('webgl_page_profile',ctx.eval(read),expected)
+        for index,label in [(0,'blank_frame'),(1,'cross_origin_frame')]:
+            frame='document.querySelectorAll("iframe")['+str(index)+'].contentWindow'
+            record('webgl_'+label+'_profile',ctx.eval(frame+'.eval('+json.dumps(read)+')'),expected)
+        nested='document.querySelectorAll("iframe")[1].contentWindow.document.querySelector("iframe").contentWindow'
+        record('webgl_nested_frame_profile',ctx.eval(nested+'.eval('+json.dumps(read)+')'),expected)
+        worker_source='postMessage('+read+');'
+        setup="""window.workerGraphics=null;
+            const u=URL.createObjectURL(new Blob([CODE],{type:'application/javascript'}));
+            const w=new Worker(u);w.onmessage=e=>{workerGraphics=e.data;w.terminate();URL.revokeObjectURL(u);};void 0;
+        """.replace('CODE',json.dumps(worker_source))
+        frame='document.querySelectorAll("iframe")[1].contentWindow'
+        ctx.eval(frame+'.eval('+json.dumps(setup)+')')
+        for _ in range(50):
+            ctx.advance(20,max_tasks=2000)
+            worker=ctx.eval(frame+'.workerGraphics')
+            if worker is not None:break
+        record('webgl_worker_from_frame_profile',worker,expected)
+        ctx.put_resource('https://next.fixture.test/','<iframe></iframe>',
+            headers=[['Content-Type','text/html']])
+        ctx.navigate('https://next.fixture.test/')
+        record('webgl_successor_frame_profile',ctx.eval(
+            'document.querySelector("iframe").contentWindow.eval('+json.dumps(read)+')'),expected)
+    with Context(timeout=30,proxy='http://127.0.0.1:9') as ctx:
+        result=ctx.eval("""(() => {
+            const c=document.createElement('canvas');c.width=c.height=4;
+            const g=c.getContext('webgl'),p=new Uint8Array(4);
+            const values=[0,1/255,.1,.125,.25,.5,.75,254/255,1,-1,2];
+            return values.map(v=>{g.clearColor(v,v,v,1);g.clear(g.COLOR_BUFFER_BIT);
+                g.readPixels(1,1,1,1,g.RGBA,g.UNSIGNED_BYTE,p);return [...p];});
+        })()""")
+        # This checks the software conversion policy. Measured GPU pixels
+        # are compared separately, including values where YS differs.
+        record('webgl_clear_unorm8_without_fragment_quantization',result,
+            [[v,v,v,255] for v in [0,1,26,32,64,128,191,254,255,0,255]])
     return checks
 
 
