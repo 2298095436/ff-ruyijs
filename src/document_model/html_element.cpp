@@ -159,7 +159,7 @@ bool CollectRendered(State& state, NodeKey key, const RenderedTextStyle& inherit
   if (!TextStyle(state, key, &style)) return false;
   if (style.display == "none") return true;
   const DomString tag = node.local_name.value_or(DomString());
-  if (tag == u"script" || tag == u"style" || tag == u"template") return true;
+  if (tag == u"template") return true;
   if (tag == u"br") { result->Character(u'\n', true); return true; }
   const bool block = style.display == "block" || style.display == "flex" || style.display == "grid" ||
       style.display == "list-item" || style.display == "table" || style.display == "table-row";

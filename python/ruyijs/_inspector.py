@@ -30,6 +30,7 @@ class InspectorControl:
         """Return retained count, native capacity and exact dropped count."""
         return self._api_log("stats")
 
-    def peek_api_log_page(self, offset=0, limit=1000):
+    def peek_api_log_page(self, offset=0, limit=1000, filter=None):
         """Read a stable bounded page without draining the native monitor."""
-        return self._api_log("page", offset=offset, limit=limit)
+        return self._api_log("page", offset=offset, limit=limit,
+            **({} if filter is None else {"filter":filter}))

@@ -5,6 +5,7 @@
 #include "js/Array.h"
 #include "js/PropertyAndElement.h"
 #include "js/Conversions.h"
+#include <algorithm>
 #include <cmath>
 
 namespace ruyijs {
@@ -53,12 +54,13 @@ void ApiMonitor::Record(const char* iface, const char* member, int type) {
   }
   auto& monitor = state_->monitor;
   if (!monitor.enabled()) return;
-  if (monitor.record_count() >= kMaxRecords) { ++state_->dropped; return; }
   // The installer's own interface and member names; the path is what the source
   // monitor reports, so a watch entry matches the same string.
   std::string path(iface);
   path += ".";
   path += member;
+  if (monitor.policy().is_ignored(observability::ApiPath(path))) return;
+  if (monitor.record_count() >= kMaxRecords) { ++state_->dropped; return; }
   // Script location of the reading frame, so an entry can be attributed without
   // the adapter holding a second copy of engine state.
   std::string detail;
@@ -76,10 +78,13 @@ bool ApiMonitor::Describe(const std::string& filter, bool drain,
                           JS::MutableHandleValue result, size_t offset, size_t limit) {
   JS::RootedValueVector entries(cx_);
   size_t matched = 0;
-  for (const auto& record : state_->monitor.records()) {
-    if (!filter.empty() && record.path().value() != filter) continue;
-    if (matched++ < offset) continue;
-    if (entries.length() >= limit) break;
+  const auto& records = state_->monitor.records();
+  const size_t first = filter.empty() ? std::min(offset, records.size()) : 0;
+  for (size_t index = first; index < records.size() && entries.length() < limit; ++index) {
+    const auto& record = records[index];
+    if (!filter.empty()) {
+      if (record.path().value() != filter || matched++ < offset) continue;
+    }
     JS::RootedObject entry(cx_, JS_NewPlainObject(cx_));
     JS::RootedString path(cx_, JS_NewStringCopyZ(cx_, record.path().value().c_str()));
     JS::RootedString kind(cx_, JS_NewStringCopyZ(cx_, TypeName(record.type())));
