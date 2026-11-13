@@ -83,6 +83,8 @@ struct State {
   // The stub adapter is opt-in through the "webgpu" profile group; with the
   // default profile requestAdapter() honestly resolves null.
   bool enabled = false;
+  // Interface exposure is independent of requestAdapter availability.
+  bool exposed = true;
   // Adapter identity and fallback flag from the "webgpu" profile group.
   std::string info_vendor, info_architecture, info_device, info_description;
   bool fallback = false;

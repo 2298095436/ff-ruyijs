@@ -10,6 +10,7 @@
 #include "runtime/scheduling_control.h"
 #include "runtime/top_level.h"
 #include "document_model/realm.h"
+#include "document_model/layout_source.h"
 #include "interaction/realm.h"
 #include "web_geometry/realm.h"
 #include "jsapi.h"
@@ -45,12 +46,22 @@ bool Mouse(JSContext* cx, JS::HandleObject target, const char* type, double x, d
       .Flag("bubbles", bubbles).Flag("cancelable", bubbles).Flag("composed", true);
   return init.Send(target, type, clock, allowed);
 }
+bool MeasureInputTarget(JSContext* cx, BrowsingContext& active, JS::HandleObject target,
+                        std::array<double, 4>* rect, bool* present) {
+  document_model::LayoutHeadSource source;
+  JS::RootedValue value(cx, JS::ObjectValue(*target));
+  JS::RootedObject root(cx);
+  if (!active.document->ReadLayoutHead(value, &source, &root)) return false;
+  auto* geometry = static_cast<web_geometry::Realm*>(source.layoutOwner);
+  if (!geometry) return resource_wire::Error(cx, "Input target has no geometry owner");
+  return geometry->MeasureElement(target, rect, present, false);
+}
 bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, double hold,
            SchedulingControl& clock) {
   if (!active.environment->InnerScreenOrigin(&gScreen.x, &gScreen.y)) return false;
   std::array<double, 4> rect{};
   bool present = false;
-  if (!active.geometry->MeasureElement(target, &rect, &present, false)) JS_ClearPendingException(cx);
+  if (!MeasureInputTarget(cx, active, target, &rect, &present)) JS_ClearPendingException(cx);
   const double x = present ? std::round(rect[0] + rect[2] / 2) : 0;
   const double y = present ? std::round(rect[1] + rect[3] / 2) : 0;
   JS::RootedObjectVector path(cx);
@@ -79,6 +90,58 @@ bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, doub
       !Pointer(cx, target, "click", x, y, 0, 0, true, clock, &clickAllowed)) return false;
   return !clickAllowed || document_model::Activate(cx, target);
 }
+bool TouchPointer(JSContext* cx, JS::HandleObject target, const char* type,
+                  double x, double y, bool down, SchedulingControl& clock,
+                  bool* allowed = nullptr) {
+  Init init(cx);
+  init.Number("clientX", x).Number("clientY", y)
+      .Number("screenX", x + gScreen.x).Number("screenY", y + gScreen.y)
+      .Number("button", 0).Number("buttons", down ? 1 : 0)
+      .Number("pointerId", 1).Text("pointerType", u"touch").Flag("isPrimary", true)
+      .Number("width", 1).Number("height", 1).Number("pressure", down ? 0.5 : 0)
+      .Number("detail", std::string(type) == "click" ? 1 : 0)
+      .Flag("bubbles", std::string(type) != "pointerenter" && std::string(type) != "pointerleave")
+      .Flag("cancelable", true).Flag("composed", true);
+  return init.Send(target, type, clock, allowed);
+}
+bool Contact(JSContext* cx, JS::HandleObject target, const char* type,
+             double x, double y, bool down, SchedulingControl& clock, bool* allowed) {
+  Init init(cx);
+  init.Number("clientX", x).Number("clientY", y).Number("pageX", x).Number("pageY", y)
+      .Number("screenX", x + gScreen.x).Number("screenY", y + gScreen.y)
+      .Number("identifier", 1).Number("radiusX", 1).Number("radiusY", 1)
+      .Number("force", down ? 0.5 : 0).Flag("bubbles", true)
+      .Flag("cancelable", true).Flag("composed", true);
+  return init.Send(target, type, clock, allowed);
+}
+bool Tap(JSContext* cx, BrowsingContext& active, JS::HandleObject target, double hold,
+         SchedulingControl& clock) {
+  if (!active.environment->InnerScreenOrigin(&gScreen.x, &gScreen.y)) return false;
+  std::array<double, 4> rect{};
+  bool present = false;
+  if (!MeasureInputTarget(cx, active, target, &rect, &present)) return false;
+  if (!present) return resource_wire::Error(cx, "tap target has no layout box");
+  const double x = std::round(rect[0] + rect[2] / 2);
+  const double y = std::round(rect[1] + rect[3] / 2);
+  bool pointerAllowed = true, startAllowed = true, endAllowed = true, clickAllowed = true;
+  if (!TouchPointer(cx, target, "pointerover", x, y, false, clock) ||
+      !TouchPointer(cx, target, "pointerenter", x, y, false, clock) ||
+      !TouchPointer(cx, target, "pointerdown", x, y, true, clock, &pointerAllowed) ||
+      !Contact(cx, target, "touchstart", x, y, true, clock, &startAllowed)) return false;
+  clock.Pass(hold);
+  if (!TouchPointer(cx, target, "pointerup", x, y, false, clock) ||
+      !Contact(cx, target, "touchend", x, y, false, clock, &endAllowed) ||
+      !TouchPointer(cx, target, "pointerout", x, y, false, clock) ||
+      !TouchPointer(cx, target, "pointerleave", x, y, false, clock)) return false;
+  if (!pointerAllowed || !startAllowed || !endAllowed) return true;
+  if (!Mouse(cx, target, "mousemove", x, y, 0, 0, true, clock) ||
+      !Mouse(cx, target, "mousedown", x, y, 1, 1, true, clock) ||
+      !document_model::PointerFocus(cx, target) ||
+      !Mouse(cx, target, "mouseup", x, y, 0, 1, true, clock) ||
+      !TouchPointer(cx, target, "click", x, y, false, clock, &clickAllowed)) return false;
+  return !clickAllowed || document_model::Activate(cx, target);
+}
+
 bool Delay(JSContext* cx, JS::HandleObject request, const char* name, double* value) {
   bool present = false;
   JS::RootedValue v(cx);
@@ -118,6 +181,9 @@ bool UserInputRequest(JSContext* cx, TopLevel& top, JS::HandleObject request,
   if (action == "click") {
     if (!target) return resource_wire::Error(cx, "click needs a target");
     if (!Click(cx, active, target, hold, scheduling)) return false;
+  } else if (action == "tap") {
+    if (!target) return resource_wire::Error(cx, "tap needs a target");
+    if (!Tap(cx, active, target, hold, scheduling)) return false;
   } else if (action == "type" || action == "press") {
     if (target && !document_model::FocusElement(cx, target)) return false;
     JS::RootedObject focused(cx);

@@ -221,7 +221,7 @@ bool Realm::ConfigureExposure() {
   State& s = *state_;
   const JSAutoRealm realm(s.cx, s.kit.page);
   JS::RootedValue secure(s.cx);
-  return JS_GetProperty(s.cx, s.kit.page, "isSecureContext", &secure) && s.secure.Apply(secure.isTrue());
+  return JS_GetProperty(s.cx, s.kit.page, "isSecureContext", &secure) && s.secure.Apply(s.exposed && secure.isTrue());
 }
 
 }  // namespace ruyijs::web_gpu

@@ -18,6 +18,7 @@ bool IsTouchList(JSObject*);
 JSObject* TouchReceiver(JSContext*, JS::HandleValue);
 JSObject* TouchListReceiver(JSContext*, JS::HandleValue);
 bool TouchValueConstructor(JSContext*, unsigned, JS::Value*);
+bool CreateTouchForInput(JSContext*, JS::HandleObject, JS::HandleObject, JS::MutableHandleObject);
 bool TouchConstructorPrototype(JSContext*, const JS::CallArgs&, bool event,
                                JS::MutableHandleObject);
 bool InstallTouchInterfaces(State&);

@@ -71,6 +71,27 @@ bool Number(JSContext* cx, JS::HandleValue input, const Field& field,
   return true;
 }
 }
+bool CreateTouchForInput(JSContext* cx, JS::HandleObject target,
+                         JS::HandleObject dict, JS::MutableHandleObject result) {
+  State* state = Owner(cx, target, false);
+  if (!state || !state->touchPrototype)
+    return Error(cx, "TypeError", "Touch input target is not installed");
+  JS::RootedValueArray<kTouchSlotCount> values(cx);
+  JS::RootedValue input(cx);
+  for (const auto& field : kFields) {
+    if (!JS_GetProperty(cx, dict, field.name, &input)) return false;
+    if (input.isUndefined()) input.setInt32(field.slot == kTouchIdentifier ? 1 : 0);
+    if (!Number(cx, input, field, values[field.slot])) return false;
+  }
+  values[kTouchTarget].setObject(*target);
+  values[kTouchOriginalTarget].setObject(*target);
+  JS::RootedObject prototype(cx, state->touchPrototype);
+  result.set(JS_NewObjectWithGivenProto(cx, &kTouchClass, prototype));
+  if (!result) return false;
+  for (unsigned slot = 0; slot < kTouchSlotCount; ++slot)
+    JS::SetReservedSlot(result, slot, values[slot]);
+  return true;
+}
 bool TouchValueConstructor(JSContext* cx, unsigned argc, JS::Value* vp) {
   const auto args = JS::CallArgsFromVp(argc, vp);
   NativeConstructorTrace trace(cx, args);

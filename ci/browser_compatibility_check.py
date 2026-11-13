@@ -387,10 +387,139 @@ def graphics_profile_checks(Context):
     return checks
 
 
+"""Local resource checks for the native changes selected from memory evidence."""
+import json
+
+
+def memory_environment_checks(Context, snapshot=None):
+    checks = {}
+    def record(name, actual, expected):
+        checks[name] = {'passed':actual == expected, 'actual':actual, 'expected':expected}
+    if snapshot:
+        try:
+            with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+                ctx.load_page('https://fixture.test/', '<title>Fixture</title>')
+                state = ctx.eval(snapshot)
+                json.dumps(state, allow_nan=False)
+                record('snapshot_missing_api_serializable',state['navigator']['deviceMemory'],{'unavailable':True})
+        except Exception as exc:
+            checks['snapshot_missing_api_serializable'] = {'passed':False, 'error':str(exc)}
+    read = '''({navigator:'gpu' in navigator,constructor:typeof GPU,
+        globals:Object.getOwnPropertyNames(globalThis).filter(k=>k.startsWith('GPU')||k==='WGSLLanguageFeatures').length})'''
+    absent = {'navigator':False, 'constructor':'undefined', 'globals':0}
+    try:
+        with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+            ctx.configure_environment({'webgpu':{'exposed':False}})
+            rejected = 0
+            for invalid in [None, 0, 'false', []]:
+                try:
+                    ctx.configure_environment({'webgpu':{'exposed':invalid}})
+                except Exception:
+                    rejected += 1
+            state = ctx.configure_environment({'navigator':{'maxTouchPoints':5}})
+            record('gpu_exposure_configuration_atomic',
+                {'rejected':rejected, 'exposed':state['webgpu']['exposed']},
+                {'rejected':4, 'exposed':False})
+            ctx.put_resource('https://child.fixture.test/', '<iframe></iframe>',
+                headers=[['Content-Type','text/html']])
+            ctx.load_page('https://fixture.test/', '<iframe></iframe><iframe src="https://child.fixture.test/"></iframe>')
+            record('gpu_hidden_page', ctx.eval(read), absent)
+            for i in range(2):
+                frame = 'document.querySelectorAll("iframe")[' + str(i) + '].contentWindow'
+                record('gpu_hidden_frame_' + str(i), ctx.eval(frame+'.eval('+json.dumps(read)+')'), absent)
+            frame = 'document.querySelectorAll("iframe")[1].contentWindow'
+            setup = '''window.workerGpu=null;
+                const u=URL.createObjectURL(new Blob([CODE],{type:'application/javascript'}));
+                const w=new Worker(u);w.onmessage=e=>{workerGpu=e.data;w.terminate();URL.revokeObjectURL(u)};void 0;'''
+            setup = setup.replace('CODE', json.dumps('postMessage('+read+')'))
+            ctx.eval(frame+'.eval('+json.dumps(setup)+')')
+            value = None
+            for _ in range(50):
+                ctx.advance(20, max_tasks=2000)
+                value = ctx.eval(frame+'.workerGpu')
+                if value is not None:
+                    break
+            record('gpu_hidden_worker_from_frame', value, absent)
+            ctx.load_page('http://insecure.fixture.test/', '')
+            record('gpu_hidden_insecure_document', ctx.eval(read), absent)
+            ctx.load_page('https://next.fixture.test/', '')
+            record('gpu_hidden_successor_document', ctx.eval(read), absent)
+        with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+            ctx.configure_environment({'webgpu':{'exposed':False}})
+            ctx.configure_environment({'webgpu':{'exposed':True}})
+            ctx.load_page('https://fixture.test/', '')
+            record('gpu_exposure_reenabled', ctx.eval("'gpu' in navigator && typeof GPU==='function'"), True)
+            ctx.eval('window.adapterDone=false;window.noAdapter=false;navigator.gpu.requestAdapter().then(a=>{noAdapter=a===null;adapterDone=true});void 0;')
+            ctx.advance(10, max_tasks=1000)
+            record('gpu_exposure_does_not_enable_adapter', ctx.eval('adapterDone && noAdapter'), True)
+    except Exception as exc:
+        checks['gpu_exposure_execution'] = {'passed':False, 'error':str(exc)}
+
+    # A new contact must activate the actual target, use that target's realm and
+    # retain TouchList invariants. The page's constructor cannot create it.
+    html = '''<style>button{margin:30px;width:80px;height:40px}</style>
+        <button id="target">Tap</button><script>
+        window.events=[];window.activations=0;window.cancelTouch=false;
+        const target=document.getElementById('target');
+        target.addEventListener('click',()=>activations++);
+        for(const type of ['pointerdown','pointerup','touchstart','touchend','click'])
+          target.addEventListener(type,e=>{
+            const t=e.changedTouches&&e.changedTouches[0];
+            const r=target.getBoundingClientRect();
+            events.push({type:e.type,trusted:e.isTrusted,time:e.timeStamp,
+              touch:t?{touches:e.touches.length,changed:e.changedTouches.length,
+                targetTouches:e.targetTouches.length,target:t.target===target,
+                inRealm:e instanceof TouchEvent,inside:t.clientX>=r.left&&t.clientX<=r.right&&t.clientY>=r.top&&t.clientY<=r.bottom}:null,
+              pointer:e.pointerType||null});
+            if(type==='touchstart'&&cancelTouch)e.preventDefault();
+          });
+        window.Touch=function(){throw new Error('page constructor must not create host input')};
+        </script>'''
+    try:
+        for frame in (False, True):
+            label = 'frame' if frame else 'page'
+            with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+                ctx.configure_environment({'navigator':{'maxTouchPoints':5}})
+                ctx.configure_clock('logical', epoch_ms=1794535200000)
+                if frame:
+                    ctx.put_resource('https://child.fixture.test/', html,
+                        headers=[['Content-Type','text/html']])
+                    ctx.load_page('https://fixture.test/', '<iframe src="https://child.fixture.test/"></iframe>')
+                    owner = 'document.querySelector("iframe").contentWindow'
+                else:
+                    ctx.load_page('https://fixture.test/', html)
+                    owner = 'window'
+                target = owner + '.document.getElementById("target")'
+                ctx.tap(target, hold_ms=80)
+                events = ctx.eval(owner+'.events')
+                contacts = [e for e in events if e['touch']]
+                down = next((e for e in events if e['type']=='pointerdown'), {})
+                record('tap_'+label+'_activates_target', ctx.eval(owner+'.activations'), 1)
+                record('tap_'+label+'_trusted_touch_pointer',
+                    bool(events) and all(e['trusted'] for e in events) and down.get('pointer')=='touch', True)
+                record('tap_'+label+'_contact_invariants',
+                    [(e['type'], e['touch']) for e in contacts], [
+                        ('touchstart',dict(touches=1,changed=1,targetTouches=1,target=True,inRealm=True,inside=True)),
+                        ('touchend',dict(touches=0,changed=1,targetTouches=0,target=True,inRealm=True,inside=True))])
+                record('tap_'+label+'_clock_duration',
+                    len(contacts)==2 and contacts[1]['time']-contacts[0]['time']>=80, True)
+                ctx.eval(owner+'.cancelTouch=true;'+owner+'.events=[];void 0;')
+                ctx.tap(target)
+                record('tap_'+label+'_cancellation_suppresses_activation',ctx.eval(owner+'.activations'),1)
+                ctx.click(target)
+                record('mouse_'+label+'_activation_preserved',ctx.eval(owner+'.activations'),2)
+    except Exception as exc:
+        checks['touch_input_execution'] = {'passed':False, 'error':str(exc)}
+    return checks
+
+
+MEMORY_SNAPSHOT = '(() => {\n  const read = fn => {\n    try {\n      const value = fn();\n      return value === undefined ? {unavailable: true} : value;\n    } catch (e) { return {error: String(e)}; }\n  };\n  const text = node => {\n    if (!node) return \'\';\n    if (node.nodeType === 3) return node.nodeValue || \'\';\n    if ([\'SCRIPT\',\'STYLE\',\'NOSCRIPT\',\'TEMPLATE\'].includes(node.nodeName)) return \'\';\n    return [...node.childNodes].map(text).join(\' \');\n  };\n  const rect = e => {\n    const r = e.getBoundingClientRect();\n    return {x: r.x, y: r.y, width: r.width, height: r.height};\n  };\n  const graphics = () => {\n    const first = document.createElement(\'canvas\').getContext(\'webgl\');\n    const second = document.createElement(\'canvas\').getContext(\'webgl2\');\n    if (!first || !second) return {error:\'WebGL context unavailable\'};\n    const d = first.getExtension(\'WEBGL_debug_renderer_info\');\n    const attributes = first.getContextAttributes();\n    return {vendor:first.getParameter(first.VENDOR),renderer:first.getParameter(first.RENDERER),\n      version:first.getParameter(first.VERSION),glslVersion:first.getParameter(first.SHADING_LANGUAGE_VERSION),\n      unmaskedVendor:d?first.getParameter(d.UNMASKED_VENDOR_WEBGL):null,\n      unmaskedRenderer:d?first.getParameter(d.UNMASKED_RENDERER_WEBGL):null,\n      version2:second.getParameter(second.VERSION),glslVersion2:second.getParameter(second.SHADING_LANGUAGE_VERSION),\n      attributes:Object.fromEntries([\'alpha\',\'antialias\',\'depth\',\'failIfMajorPerformanceCaveat\',\n        \'powerPreference\',\'premultipliedAlpha\',\'preserveDrawingBuffer\',\'stencil\'].map(k=>[k,attributes[k]])),\n      extensions:first.getSupportedExtensions(),extensions2:second.getSupportedExtensions(),\n      limits:Object.fromEntries([3379,34076,34024,34921,34930,35660,35661,36347,36349,36348]\n        .map(k=>[String(k),first.getParameter(k)]))};\n  };\n  const globals = ["fetch", "XMLHttpRequest", "Worker", "SharedWorker", "MessageChannel",\n    "MessagePort", "MutationObserver", "ResizeObserver", "IntersectionObserver",\n    "OffscreenCanvas", "WebGLRenderingContext", "WebGL2RenderingContext", "AudioContext",\n    "RTCPeerConnection", "crypto", "WebAssembly", "indexedDB", "localStorage",\n    "sessionStorage", "CSS", "matchMedia", "requestAnimationFrame", "structuredClone"];\n  return {\n    url: location.href, title: document.title, readyState: document.readyState,\n    secure: isSecureContext,\n    navigator: Object.fromEntries(["userAgent", "appVersion", "platform", "language",\n      "languages", "hardwareConcurrency", "deviceMemory", "maxTouchPoints", "vendor", "productSub",\n      "webdriver", "cookieEnabled", "onLine", "appCodeName", "appName", "product", "vendorSub",\n      "oscpu", "buildID", "doNotTrack", "pdfViewerEnabled", "globalPrivacyControl"].map(k => [k, read(() => navigator[k])])),\n    screen: Object.fromEntries(["width", "height", "availWidth", "availHeight", "availLeft",\n      "availTop", "colorDepth", "pixelDepth", "top", "left"].map(k => [k, read(() => screen[k])])),\n    viewport: {width: innerWidth, height: innerHeight, devicePixelRatio},\n    locale: {timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,\n      osLocale: Intl.DateTimeFormat().resolvedOptions().locale},\n    webgl: read(graphics),\n    webgpu: {exposed: read(() => \'gpu\' in navigator)},\n    capabilities: Object.fromEntries(globals.map(k => [k, read(() => typeof globalThis[k])])),\n    crypto: {subtle: read(() => typeof crypto.subtle),\n      getRandomValues: read(() => typeof crypto.getRandomValues)},\n    application: {jquery: read(() => typeof jQuery === "function" ? jQuery.fn.jquery : null),\n      hcaptcha: read(() => typeof hcaptcha), refreshCaptcha: read(() => typeof RefreshCaptcha),\n      hcaptchaMethods: read(() => typeof hcaptcha === \'object\' ?\n        Object.fromEntries([\'render\',\'execute\',\'reset\',\'getResponse\'].map(k => [k, typeof hcaptcha[k]])) : {}),\n      responseLengths: [...document.querySelectorAll(\'[name="h-captcha-response"],[name="g-recaptcha-response"]\')]\n        .map(e => ({name: e.name, length: e.value.length})),\n      checkbox: read(() => {\n        const e = document.querySelector(\'#checkbox[role="checkbox"],[role="checkbox"]\');\n        return e ? {role: e.getAttribute("role"), checked: e.getAttribute("aria-checked"),\n          label: e.getAttribute("aria-label"), rect: rect(e)} : null;\n      })},\n    scripts: [...document.scripts].map(e => ({src: e.src, type: e.type, async: e.async})),\n    frames: [...document.querySelectorAll("iframe")].map(e => ({src: e.src, title: e.title,\n      rect: read(() => rect(e)), display: read(() => getComputedStyle(e).display),\n      visibility: read(() => getComputedStyle(e).visibility)})),\n    bodyText: text(document.body).replace(/\\s+/g, \' \').trim().slice(0, 2500),\n    resources: read(() => performance.getEntriesByType("resource").map(e => ({\n      name: e.name, initiatorType: e.initiatorType, duration: e.duration,\n      transferSize: e.transferSize, responseEnd: e.responseEnd}))),\n    errors: globalThis.__environmentErrors || []\n  };\n})()\n'
+
 CONFIG = {'navigator': {'userAgent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:158.0) Gecko/20100101 Firefox/158.0', 'appVersion': '5.0 (Windows)', 'platform': 'Win32', 'language': 'en-US', 'languages': ['en-US', 'en'], 'hardwareConcurrency': 12, 'maxTouchPoints': 0}, 'screen': {'width': 1366, 'height': 768, 'availWidth': 1366, 'availHeight': 720, 'availLeft': 0, 'availTop': 0, 'colorDepth': 24, 'pixelDepth': 24}, 'viewport': {'width': 1360, 'height': 876, 'devicePixelRatio': 1}, 'locale': {'timezone': 'Asia/Shanghai', 'osLocale': 'en-US'}}
 
 def main():
     checks = device_memory_checks(Context)
+    checks.update(memory_environment_checks(Context, MEMORY_SNAPSHOT))
     for name, script, expected, html, resources, settle in runtime_cases():
         try:
             with Context(timeout=30, proxy='http://127.0.0.1:9', tls='158', environment=CONFIG) as ctx:

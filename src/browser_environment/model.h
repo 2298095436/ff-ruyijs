@@ -123,7 +123,7 @@ inline constexpr Field kWebGpuFields[] = {
   {"architecture", ValueType::String}, {"device", ValueType::String},
   {"description", ValueType::String}, {"features", ValueType::Strings},
   {"deviceFeatures", ValueType::Strings}, {"limits", ValueType::Map},
-  {"fallback", ValueType::Boolean}};
+  {"fallback", ValueType::Boolean}, {"exposed", ValueType::Boolean}};
 // The "permissions" group: PermissionName -> granted|denied|prompt. The table
 // belongs to the Permissions owner (docs/owners/PERMISSIONS.md); the baseline
 // has no such group, so the owner's Firefox defaults apply.

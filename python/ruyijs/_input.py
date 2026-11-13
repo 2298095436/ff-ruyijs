@@ -28,6 +28,16 @@ class InputControl:
             raise TypeError("click target must be a string expression")
         return self._user(action="click", target=target, hold_ms=hold_ms)
 
+    def tap(self, target, *, hold_ms=80):
+        """Send one native touch contact and its uncancelled activation.
+
+        This is automated host input, with the current clock and target
+        geometry; it does not replay a recorded visitor's input.
+        """
+        if not isinstance(target, str):
+            raise TypeError("tap target must be a string expression")
+        return self._user(action="tap", target=target, hold_ms=hold_ms)
+
     def type(self, text, *, target=None, interval_ms=60):
         """Type `text` into the focused element (or focus `target` first).
 

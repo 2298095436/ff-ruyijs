@@ -110,6 +110,8 @@ bool GpuPort(void* context, JS::HandleObject group) {
   JS::RootedValue value(cx);
   if (!JS_GetProperty(cx, group, "enabled", &value)) return false;
   const bool enabled = value.isUndefined() ? state.enabled : JS::ToBoolean(value);
+  if (!JS_GetProperty(cx, group, "exposed", &value)) return false;
+  const bool exposed = value.isUndefined() ? state.exposed : JS::ToBoolean(value);
   if (!JS_GetProperty(cx, group, "fallback", &value)) return false;
   const bool fallback = value.isUndefined() ? state.fallback : JS::ToBoolean(value);
 
@@ -135,12 +137,15 @@ bool GpuPort(void* context, JS::HandleObject group) {
     return WebKit::Fail(cx, "webgpu deviceFeatures must be a subset of features");
   for (const auto& limit : limits) state.model.SetLimit(limit.name, limit.value);
   state.enabled = enabled;
+  state.exposed = exposed;
   state.fallback = fallback;
   state.info_vendor = vendor;
   state.info_architecture = architecture;
   state.info_device = device;
   state.info_description = description;
-  return true;
+  JS::RootedValue secure(cx);
+  return JS_GetProperty(cx, state.kit.page, "isSecureContext", &secure) &&
+         state.secure.Apply(state.exposed && secure.isTrue());
 }
 
 bool GpuDescribe(void* context, JS::MutableHandleValue out) {
@@ -150,6 +155,8 @@ bool GpuDescribe(void* context, JS::MutableHandleValue out) {
   if (!group) return false;
   JS::RootedValue value(cx, JS::BooleanValue(state.enabled));
   if (!Define(state, group, "enabled", value)) return false;
+  value.setBoolean(state.exposed);
+  if (!Define(state, group, "exposed", value)) return false;
   const std::pair<const char*, const std::string*> texts[] = {
       {"vendor", &state.info_vendor}, {"architecture", &state.info_architecture},
       {"device", &state.info_device}, {"description", &state.info_description}};

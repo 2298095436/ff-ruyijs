@@ -7,6 +7,8 @@
 #include "interaction/event_creation.h"
 #include "interaction/realm.h"
 #include "interaction/runtime_event.h"
+#include "interaction/touch.h"
+#include "js/Array.h"
 #include "js/PropertyAndElement.h"
 #include "js/Realm.h"
 #include "js/Wrapper.h"
@@ -26,6 +28,8 @@ bool Lookup(const char* type, Family* family) {
   else if (Among(type, {"mousedown", "mousemove", "mouseup", "dblclick", "mouseover",
                         "mouseout", "mouseenter", "mouseleave"}))
     *family = {Iface::Mouse, Kind::Mouse, "MouseEvent"};
+  else if (Among(type, {"touchstart", "touchmove", "touchend", "touchcancel"}))
+    *family = {Iface::Touch, Kind::Touch, "TouchEvent"};
   else if (Among(type, {"keydown", "keypress", "keyup"}))
     *family = {Iface::Keyboard, Kind::Keyboard, "KeyboardEvent"};
   else if (Among(type, {"beforeinput", "input"}))
@@ -52,7 +56,19 @@ bool DispatchTrusted(JSContext* cx, JS::HandleObject target, const char* type,
         (!present && !JS_DefineProperty(cx, dictionary, field, true, JSPROP_ENUMERATE))) return false;
   }
   if (!JS_DefineProperty(cx, dictionary, "view", state->page, JSPROP_ENUMERATE)) return false;
-  JS::RootedObject prototype(cx);
+if (family.iface == Iface::Touch) {
+  JS::RootedObject touch(cx);
+  if (!CreateTouchForInput(cx, local, dictionary, &touch)) return false;
+  const bool active = Among(type, {"touchstart", "touchmove"});
+  for (const char* name : {"touches", "targetTouches", "changedTouches"}) {
+    JS::RootedObject list(cx, JS::NewArrayObject(cx, 0));
+    JS::RootedValue value(cx, JS::ObjectValue(*touch));
+    if (!list || ((active || !std::strcmp(name, "changedTouches")) &&
+        !JS_DefineElement(cx, list, 0, value, JSPROP_ENUMERATE)) ||
+        !JS_DefineProperty(cx, dictionary, name, list, JSPROP_ENUMERATE)) return false;
+  }
+}
+JS::RootedObject prototype(cx);
   if (family.iface == Iface::Pointer) prototype = state->pointerPrototype;
   else if (family.iface == Iface::Mouse) prototype = state->mousePrototype;
   else if (!ReadInstalledEventPrototype(*state, family.iface, &prototype)) return false;
