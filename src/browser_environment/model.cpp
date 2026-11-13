@@ -48,7 +48,7 @@ bool Model::Read(Kind kind, uint32_t field, FieldValue* result) const noexcept {
     // Challenge-research access log (RUYIJS_CF_ACCESS_LOG).
     static const char* const kindNames[] = {"navigator", "screen", "location", "history",
         "locale", "webgl", "webgpu", "viewport", "permissions", "geolocation", "speech",
-        "storage", "media", "canvas", "audio", "mediafeatures", "rtc", "fonts"};
+        "storage", "media", "canvas", "audio", "mediafeatures", "rtc", "fonts", "input"};
     const auto index = static_cast<size_t>(kind);
     if (index < sizeof(kindNames) / sizeof(kindNames[0]))
       cf_log::access(kindNames[index], std::to_string(field));
@@ -128,6 +128,10 @@ bool Model::Read(Kind kind, uint32_t field, FieldValue* result) const noexcept {
       } else if (field == 2) {
         result->text = value.default_voice();
       } else return false;
+    } else if (kind == Kind::Input && field == 0) {
+      using Policy = domain::browser_environment::TouchEventsOverride;
+      result->text = impl_->touch_override == Policy::Enabled ? "enabled"
+          : impl_->touch_override == Policy::Disabled ? "disabled" : "auto";
     } else if (kind == Kind::Storage) {
       // The StorageManager owner's estimate and persistence answer.
       if (field == 0) result->number = impl_->storage_quota;

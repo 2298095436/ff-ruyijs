@@ -13,6 +13,7 @@ Environment::Environment(JSContext* cx, JS::HandleObject page, Environment& pare
   // Each frame owns its GL objects, with the creator's locked profile.
   // Keep the buffered data so Workers created in this frame inherit it too.
   state_->webglGroup = owner->webglGroup.get();
+  state_->gpuGroup = owner->gpuGroup.get();
   state_->topWindow = owner->topWindow;
   state_->parentWindow = owner->page;
   state_->frameElement = frameElement;

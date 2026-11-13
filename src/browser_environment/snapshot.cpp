@@ -72,6 +72,8 @@ bool Environment::Describe(JS::MutableHandleValue result) {
       !Group(state, output, "locale", Kind::Locale, kLocaleFields, std::size(kLocaleFields)) ||
       !Group(state, output, "storage", Kind::Storage, kStorageFields,
              std::size(kStorageFields)) ||
+      !Group(state, output, "input", Kind::Input, kInputFields,
+             std::size(kInputFields)) ||
       !Group(state, output, "history", Kind::History, &history, 1)) return false;
   // The webgl group's effective values come from the WebGL owner, never from a
   // copy here. It is present whenever the owner is installed.

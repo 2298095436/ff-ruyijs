@@ -14,6 +14,8 @@ bool ConfigureSecureExposure(BrowsingContext& context) {
   std::string osLocale;
   if (!context.environment->ReadOsLocale(&osLocale)) return false;
   web_geometry::SetBrowserLanguage(osLocale);
+  bool touchEvents = false;
+  if (!context.environment->TouchEventsEnabled(&touchEvents)) return false;
   double ratio = 1;
   if (!context.environment->ReadDevicePixelRatio(&ratio)) return false;
   web_geometry::SetDevicePixelRatio(ratio);
@@ -31,6 +33,7 @@ bool ConfigureSecureExposure(BrowsingContext& context) {
          // window.cookieStore and CookieStore; the per-context port names this
          // context's resource network realm for the main page and for a frame.
          (!context.navigatorNetwork || context.navigatorNetwork->ConfigureExposure()) &&
+         context.interaction->ConfigureTouchExposure(touchEvents) &&
          context.interaction->ConfigureExposure() &&
          context.document->ConfigureExposure() &&
          context.environment->ConfigureSecureMembers() &&

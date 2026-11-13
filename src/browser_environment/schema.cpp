@@ -110,6 +110,9 @@ bool Profile(JSContext* cx, JS::HandleObject object, bool complete,
       seen |= 16;
       if (!Group(cx, nested, Kind::Viewport, kViewportFields,
                  std::size(kViewportFields), complete, changes)) return false;
+    } else if (group == "input") {
+      if (!Group(cx, nested, Kind::Input, kInputFields,
+                 std::size(kInputFields), complete, changes)) return false;
     } else if (group == "webgl") {
       // The WebGL owner's data: the baseline may pin the GL strings, the WebGL2
       // version strings, the context attributes, the extension lists and the

@@ -74,6 +74,10 @@ bool Model::Configure(const std::vector<Change>& changes) noexcept {
         if (!candidate->aggregate.configure_locale_timezone(value.text)) return false;
       } else if (change.kind == Kind::Locale && change.field == 1) {
         extra_os_locale = value.text;
+      } else if (change.kind == Kind::Input && change.field == 0) {
+        using Policy = domain::browser_environment::TouchEventsOverride;
+        candidate->touch_override = value.text == "enabled" ? Policy::Enabled
+            : value.text == "disabled" ? Policy::Disabled : Policy::Auto;
       } else if (change.kind == Kind::Storage) {
         switch (change.field) {
           case 0: extra_storage_quota = value.number; break;

@@ -10,7 +10,7 @@
 namespace ruyijs::browser_environment {
 enum class Kind : int32_t { Navigator, Screen, Location, History, Locale, WebGL, WebGpu, Viewport,
                             Permissions, Geolocation, Speech, Storage, Media, Canvas,
-                            Audio, MediaFeatures, Rtc, Fonts };
+                            Audio, MediaFeatures, Rtc, Fonts, Input };
 // Number is a finite double; a field marked nullable also accepts null.
 // Object is a fixed member list and Map a caller-named table; both carry their
 // shape in `members`/`count`/`value` below, so one group field can describe a
@@ -83,6 +83,9 @@ inline constexpr Field kLocaleFields[] = {{"timezone", ValueType::String},
 // geometry: Firefox derives window.devicePixelRatio and the CSS `resolution` /
 // `-webkit-device-pixel-ratio` media features from it, so it lives here and the
 // styling owner reads it through Describe() instead of keeping a second value.
+// Native touch interface policy, independent of navigator.maxTouchPoints.
+inline constexpr Field kInputFields[] = {
+  {"touchEvents", ValueType::String, false, false, "auto|enabled|disabled"}};
 inline constexpr Field kViewportFields[] = {{"width", ValueType::Integer},
                                              {"height", ValueType::Integer},
                                              {"devicePixelRatio", ValueType::Number}};
