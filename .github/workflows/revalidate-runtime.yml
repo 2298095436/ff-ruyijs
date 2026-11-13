@@ -1,0 +1,37 @@
+name: Revalidate existing runtime
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+            native_run: 43432138236
+          - os: windows-latest
+            platform: windows
+            native_run: 43432154382
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify unchanged native source and revalidate the cloud wheel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python ci/revalidate_runtime.py --run ${{ matrix.native_run }} --platform ${{ matrix.platform }} --native-commit 87391966072537b6b7e6c105d7b7a93612b2e067
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compatibility-revalidation-${{ matrix.platform }}
+          path: artifacts/*.json
+          if-no-files-found: error
+          retention-days: 14

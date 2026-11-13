@@ -671,7 +671,10 @@ def touch_handler_environment_checks(Context):
                     ctx.load_page('https://fixture.test/', html)
                     owner = 'window'
                 evaluate = lambda code: ctx.eval(owner+'.eval('+json.dumps(code)+')')
-                record('touch_handlers_'+label+'_exposure', evaluate(TOUCH_HANDLER_SOURCE), enabled)
+                # The fixture has already assigned ontouchend on these two
+                # receivers; newly created HTML/SVG/MathML still have nulls.
+                assigned = dict(enabled, defaults=[False, False, True, True, True])
+                record('touch_handlers_'+label+'_exposure', evaluate(TOUCH_HANDLER_SOURCE), assigned)
                 ctx.tap(owner+'.document.getElementById("t")')
                 record('touch_handlers_'+label+'_feature_gated_native_delivery', evaluate('seen'),
                        [['listener', True], ['document', True, True], ['window', True, True]])
