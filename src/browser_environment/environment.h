@@ -158,6 +158,7 @@ class Environment final {
   bool TouchEventsEnabled(bool* result);
   // Geometry reads the same private viewport/scroll source as Window scalars.
   bool ReadLayoutViewport(double* width, double* height, double* scrollX, double* scrollY);
+  bool ReadLayoutScrollbarWidth(double* width);
   // The document's scrolling element (Document Model) scrolls the viewport
   // through the window's one scroll operation: same clamp, same events.
   bool ScrollViewportTo(double scrollX, double scrollY);

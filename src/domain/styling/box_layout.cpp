@@ -109,9 +109,10 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
   // A scroll container's scrollbars take their room from its content box
   // (overflow:scroll always; auto once the content overflows, below).
   const bool scroller = !inline_box && BoxScrollContainer(nodes, index);
+  const double scrollbar = style.Get("scrollbar-width") == "none" ? 0 : viewport.scrollbar_width;
   const auto overflow_x = style.Slot(BoxKnown::OverflowX), overflow_y = style.Slot(BoxKnown::OverflowY);
-  box.scrollbar = {scroller && overflow_y == "scroll" ? kBoxScrollbar : 0,
-                   scroller && overflow_x == "scroll" ? kBoxScrollbar : 0};
+  box.scrollbar = {scroller && overflow_y == "scroll" ? scrollbar : 0,
+                   scroller && overflow_x == "scroll" ? scrollbar : 0};
   box.content[2] = std::max(0.0, box.content[2] - box.scrollbar[0]);
   if (box.definite_height) box.content[3] = std::max(0.0, box.content[3] - box.scrollbar[1]);
   double children_height = 0, children_width = 0;
@@ -120,13 +121,13 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
     bool again = false;
     if (overflow_y == "auto" && box.scrollbar[0] == 0 && box.definite_height &&
         children_height > box.content[3]) {
-      box.scrollbar[0] = kBoxScrollbar;
-      box.content[2] = std::max(0.0, box.content[2] - kBoxScrollbar);
+      box.scrollbar[0] = scrollbar;
+      box.content[2] = std::max(0.0, box.content[2] - scrollbar);
       again = true;
     }
     if (overflow_x == "auto" && box.scrollbar[1] == 0 && children_width > box.content[2]) {
-      box.scrollbar[1] = kBoxScrollbar;
-      if (box.definite_height) box.content[3] = std::max(0.0, box.content[3] - kBoxScrollbar);
+      box.scrollbar[1] = scrollbar;
+      if (box.definite_height) box.content[3] = std::max(0.0, box.content[3] - scrollbar);
     }
     if (again && !Children(index, child_positioned, depth, &children_height, &children_width)) return false;
   }
@@ -246,6 +247,10 @@ bool ComputeBoxLayout(const std::vector<BoxNode>& nodes, const BoxViewport& view
   // nsHTMLScrollFrame::ReflowContents for the viewport: lay out without
   // scrollbars, then with each auto scrollbar the scrollable overflow needs.
   const size_t source = ViewportOverflowSource(nodes);
+  // scrollbar-width on the root applies to the viewport; the body
+  // does not propagate this property with its overflow.
+  const double scrollbar = nodes[0].style.Get("scrollbar-width") == "none"
+      ? 0 : viewport.scrollbar_width;
   const auto overflow_x = nodes[source].style.Slot(BoxKnown::OverflowX), overflow_y = nodes[source].style.Slot(BoxKnown::OverflowY);
   const auto may = [](const std::string& value) { return value != "hidden" && value != "clip"; };
   bool vertical = overflow_y == "scroll", horizontal = overflow_x == "scroll";
@@ -254,8 +259,8 @@ bool ComputeBoxLayout(const std::vector<BoxNode>& nodes, const BoxViewport& view
   BoxLayoutCache pass_cache;
   std::vector<char> initial_clean;
   for (int attempt = 0; attempt < 4; ++attempt) {
-    pass.client_width = std::max(0.0, viewport.width - (vertical ? kBoxScrollbar : 0));
-    pass.client_height = std::max(0.0, viewport.height - (horizontal ? kBoxScrollbar : 0));
+    pass.client_width = std::max(0.0, viewport.width - (vertical ? scrollbar : 0));
+    pass.client_height = std::max(0.0, viewport.height - (horizontal ? scrollbar : 0));
     BoxLayoutCache next_cache;
     BoxReuseInput scrollbar_reuse;
     const BoxReuseInput* active_reuse = reuse;
@@ -279,7 +284,9 @@ bool ComputeBoxLayout(const std::vector<BoxNode>& nodes, const BoxViewport& view
     const bool want_vertical = overflow_y == "scroll" ||
         (may(overflow_y) && BoxRound(bottom) > pass.client_height);
     const bool want_horizontal = overflow_x == "scroll" ||
-        (may(overflow_x) && BoxRound(right) > std::max(0.0, viewport.width - (want_vertical ? kBoxScrollbar : 0)));
+        // Test overflow against the width used by this pass. A newly needed
+        // vertical bar triggers another layout before deciding horizontal overflow.
+        (may(overflow_x) && BoxRound(right) > pass.client_width);
     if (want_vertical == vertical && want_horizontal == horizontal) break;
     // Scrollbars only get added within one reflow (no oscillation).
     vertical = vertical || want_vertical; horizontal = horizontal || want_horizontal;
@@ -320,6 +327,7 @@ bool LayoutPass(const std::vector<BoxNode>& nodes, const BoxViewport& viewport,
   if (cache_out) {
     cache_out->viewport_width = viewport.width;
     cache_out->viewport_height = viewport.height;
+    cache_out->scrollbar_width = viewport.scrollbar_width;
     cache_out->overflow_source = overflow_source;
     cache_out->boxes = *result;
     cache_out->leading = std::move(flow.leading);

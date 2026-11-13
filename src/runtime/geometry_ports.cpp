@@ -144,6 +144,9 @@ bool BindGeometryPorts(BrowsingContext& context) {
   boxes.stamp = [](void* raw, JS::HandleObject element, uint64_t* stamp) {
     return static_cast<BrowsingContext*>(raw)->styling->CascadeStamp(element, stamp);
   };
+  boxes.scrollbarWidth = [](void* raw, double* width) {
+    return static_cast<BrowsingContext*>(raw)->environment->ReadLayoutScrollbarWidth(width);
+  };
   boxes.viewport = [](void* raw, double* width, double* height, double* x, double* y) {
     auto& owner = *static_cast<BrowsingContext*>(raw);
     return owner.environment->ReadLayoutViewport(width,height,x,y);

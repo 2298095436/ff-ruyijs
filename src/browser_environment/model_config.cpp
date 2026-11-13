@@ -89,6 +89,7 @@ bool Model::Configure(const std::vector<Change>& changes) noexcept {
         if (change.field == 0) extra_viewport_width = value.integer;
         else if (change.field == 1) extra_viewport_height = value.integer;
         else if (change.field == 2) extra_device_pixel_ratio = value.number;
+        else if (change.field == kViewportScrollbarWidth) candidate->scrollbar_width = value.number;
         else return false;
       } else return false;
     }

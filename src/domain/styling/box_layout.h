@@ -79,6 +79,7 @@ struct BoxViewport {
   // The scrollport (initial and fixed containing block): the viewport less the
   // viewport scrollbars; set by ComputeBoxLayout, -1 for the full viewport.
   double client_width = -1, client_height = -1;
+  double scrollbar_width = 17;  // Zero reserves no space (overlay).
   double ClientWidth() const { return client_width >= 0 ? client_width : width; }
   double ClientHeight() const { return client_height >= 0 ? client_height : height; }
 };
@@ -105,7 +106,7 @@ struct BoxPlaceRecord {
   bool definite_height = false, parent_bfc = false, valid = false;
 };
 struct BoxLayoutCache {
-  double viewport_width = 0, viewport_height = 0;
+  double viewport_width = 0, viewport_height = 0, scrollbar_width = 17;
   size_t overflow_source = 0;
   std::vector<BoxLayout> boxes;
   std::vector<double> leading, trailing, min_content, max_content;

@@ -41,7 +41,8 @@
   "viewport": {
     "width": 1280,
     "height": 720,
-    "devicePixelRatio": 2
+    "devicePixelRatio": 2,
+    "scrollbarWidth": 17
   },
   "location": {
     "href": "https://example.test/"

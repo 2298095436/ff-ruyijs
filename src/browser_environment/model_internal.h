@@ -36,6 +36,7 @@ struct Model::Impl {
   // 100% scaling desktop display is 1; the CSS `resolution` media features
   // derive from this one value (web_styling reads it through Describe()).
   double device_pixel_ratio = 1.0;
+  double scrollbar_width = 17.0;
   // kStorageFields (quota / usage / persisted). The quota is Firefox's desktop
   // default for a fresh origin; the headless runtime keeps no persistent store,
   // so usage and persistence read the configured values only.

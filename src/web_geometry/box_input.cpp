@@ -362,7 +362,8 @@ bool LayoutFor(State& s, JS::HandleObject element, std::shared_ptr<const LayoutC
   }
   box::BoxViewport& viewport=*viewport_out;
   if(!s.boxPorts.viewport(s.boxPorts.context,&viewport.width,&viewport.height,&viewport.scroll_x,&viewport.scroll_y)) return false;
-  const std::array<double,4> view{viewport.width,viewport.height,viewport.scroll_x,viewport.scroll_y};
+  if(s.boxPorts.scrollbarWidth && !s.boxPorts.scrollbarWidth(s.boxPorts.context,&viewport.scrollbar_width)) return false;
+  const std::array<double,5> view{viewport.width,viewport.height,viewport.scroll_x,viewport.scroll_y,viewport.scrollbar_width};
   uint64_t stamp=0;
   bool stamped=s.boxPorts.stamp&&s.boxPorts.stamp(s.boxPorts.context,target,&stamp);
   if(!stamped) JS_ClearPendingException(s.cx);  // Uncached: the full path below reports real errors.

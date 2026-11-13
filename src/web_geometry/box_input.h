@@ -35,7 +35,7 @@ struct LayoutTreeMeta {
 struct LayoutCache {
   document_model::NodeKey root, focused;
   uint64_t revision = 0, styles = 0, structure = 0, tree = 0, fonts = 0;
-  std::array<double, 4> viewport{};
+  std::array<double, 5> viewport{};
   std::vector<box::BoxNode> nodes;
   std::vector<box::BoxLayout> layout;
   box::BoxScrollport scrollport;  // The viewport scroll frame of this layout.

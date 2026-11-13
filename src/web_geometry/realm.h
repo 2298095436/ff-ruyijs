@@ -54,6 +54,7 @@ struct BoxPorts {
                           std::vector<document_model::ChangedElement>*) = nullptr;
   bool (*wrap)(void*, JS::HandleValue, document_model::NodeKey, JS::MutableHandleObject) = nullptr;
   bool (*viewport)(void*, double*, double*, double*, double*) = nullptr;
+  bool (*scrollbarWidth)(void*, double*) = nullptr;
   bool (*stamp)(void*, JS::HandleObject, uint64_t*) = nullptr;  // Cascade fingerprint.
   void* context = nullptr;
 };

@@ -148,6 +148,7 @@ bool Model::Read(Kind kind, uint32_t field, FieldValue* result) const noexcept {
       else if (field == 1) result->integer = impl_->viewport_height < 0
           ? owner.screen().avail_height() : impl_->viewport_height;
       else if (field == 2) result->number = impl_->device_pixel_ratio;
+      else if (field == kViewportScrollbarWidth) result->number = impl_->scrollbar_width;
       else return false;
     } else return false;
     return true;

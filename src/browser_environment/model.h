@@ -88,10 +88,13 @@ inline constexpr Field kInputFields[] = {
   {"touchEvents", ValueType::String, false, false, "auto|enabled|disabled"}};
 inline constexpr Field kViewportFields[] = {{"width", ValueType::Integer},
                                              {"height", ValueType::Integer},
-                                             {"devicePixelRatio", ValueType::Number}};
+                                             {"devicePixelRatio", ValueType::Number},
+                                             {"scrollbarWidth", ValueType::Number}};
 // Index of devicePixelRatio in kViewportFields; the Window facade and the
 // styling owner's media-feature source both read it through this index.
 inline constexpr uint32_t kViewportDevicePixelRatio = 2;
+// Reserved layout space in CSS pixels; zero selects overlay scrollbars.
+inline constexpr uint32_t kViewportScrollbarWidth = 3;
 // The "webgl" group configures the six GL strings a fingerprint probe reads
 // (the donor's webgl.vendor / webgl.renderer / webgl.unmasked_vendor /
 // webgl.unmasked_renderer keys plus the two version strings); the numeric

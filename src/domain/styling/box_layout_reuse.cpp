@@ -14,7 +14,8 @@ bool ValidCache(const BoxLayoutCache& c, const BoxViewport& vp, size_t expected)
   const size_t m = c.boxes.size();
   return m != 0 && (expected == 0 || m == expected) && c.places.size() == m &&
          c.leading.size() == m && c.trailing.size() == m && c.empty_flow.size() == m &&
-         c.self_collapse.size() == m && vp.width == c.viewport_width && vp.height == c.viewport_height;
+         c.self_collapse.size() == m && vp.width == c.viewport_width && vp.height == c.viewport_height &&
+         vp.scrollbar_width == c.scrollbar_width;
 }
 }  // namespace
 

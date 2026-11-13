@@ -540,10 +540,85 @@ def memory_environment_checks(Context, snapshot=None):
                 record('mouse_'+label+'_activation_preserved',ctx.eval(owner+'.activations'),2)
     except Exception as exc:
         checks['touch_input_execution'] = {'passed':False, 'error':str(exc)}
+    checks.update(scrollbar_environment_checks(Context))
     return checks
 
 
-MEMORY_SNAPSHOT = '(() => {\n  const read = fn => {\n    try {\n      const value = fn();\n      return value === undefined ? {unavailable: true} : value;\n    } catch (e) { return {error: String(e)}; }\n  };\n  const text = node => {\n    if (!node) return \'\';\n    if (node.nodeType === 3) return node.nodeValue || \'\';\n    if ([\'SCRIPT\',\'STYLE\',\'NOSCRIPT\',\'TEMPLATE\'].includes(node.nodeName)) return \'\';\n    return [...node.childNodes].map(text).join(\' \');\n  };\n  const rect = e => {\n    const r = e.getBoundingClientRect();\n    return {x: r.x, y: r.y, width: r.width, height: r.height};\n  };\n  const graphics = () => {\n    const first = document.createElement(\'canvas\').getContext(\'webgl\');\n    const second = document.createElement(\'canvas\').getContext(\'webgl2\');\n    if (!first || !second) return {error:\'WebGL context unavailable\'};\n    const d = first.getExtension(\'WEBGL_debug_renderer_info\');\n    const attributes = first.getContextAttributes();\n    return {vendor:first.getParameter(first.VENDOR),renderer:first.getParameter(first.RENDERER),\n      version:first.getParameter(first.VERSION),glslVersion:first.getParameter(first.SHADING_LANGUAGE_VERSION),\n      unmaskedVendor:d?first.getParameter(d.UNMASKED_VENDOR_WEBGL):null,\n      unmaskedRenderer:d?first.getParameter(d.UNMASKED_RENDERER_WEBGL):null,\n      version2:second.getParameter(second.VERSION),glslVersion2:second.getParameter(second.SHADING_LANGUAGE_VERSION),\n      attributes:Object.fromEntries([\'alpha\',\'antialias\',\'depth\',\'failIfMajorPerformanceCaveat\',\n        \'powerPreference\',\'premultipliedAlpha\',\'preserveDrawingBuffer\',\'stencil\'].map(k=>[k,attributes[k]])),\n      extensions:first.getSupportedExtensions(),extensions2:second.getSupportedExtensions(),\n      limits:Object.fromEntries([3379,34076,34024,34921,34930,35660,35661,36347,36349,36348]\n        .map(k=>[String(k),first.getParameter(k)]))};\n  };\n  const globals = ["fetch", "XMLHttpRequest", "Worker", "SharedWorker", "MessageChannel",\n    "MessagePort", "MutationObserver", "ResizeObserver", "IntersectionObserver",\n    "OffscreenCanvas", "WebGLRenderingContext", "WebGL2RenderingContext", "AudioContext",\n    "RTCPeerConnection", "crypto", "WebAssembly", "indexedDB", "localStorage",\n    "sessionStorage", "CSS", "matchMedia", "requestAnimationFrame", "structuredClone"];\n  return {\n    url: location.href, title: document.title, readyState: document.readyState,\n    secure: isSecureContext,\n    navigator: Object.fromEntries(["userAgent", "appVersion", "platform", "language",\n      "languages", "hardwareConcurrency", "deviceMemory", "maxTouchPoints", "vendor", "productSub",\n      "webdriver", "cookieEnabled", "onLine", "appCodeName", "appName", "product", "vendorSub",\n      "oscpu", "buildID", "doNotTrack", "pdfViewerEnabled", "globalPrivacyControl"].map(k => [k, read(() => navigator[k])])),\n    screen: Object.fromEntries(["width", "height", "availWidth", "availHeight", "availLeft",\n      "availTop", "colorDepth", "pixelDepth", "top", "left"].map(k => [k, read(() => screen[k])])),\n    viewport: {width: innerWidth, height: innerHeight, devicePixelRatio},\n    locale: {timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,\n      osLocale: Intl.DateTimeFormat().resolvedOptions().locale},\n    webgl: read(graphics),\n    webgpu: {exposed: read(() => \'gpu\' in navigator)},\n    input: {touchEvents: read(() => typeof TouchEvent === \'function\' ? \'enabled\' : \'disabled\')},\n    capabilities: Object.fromEntries(globals.map(k => [k, read(() => typeof globalThis[k])])),\n    crypto: {subtle: read(() => typeof crypto.subtle),\n      getRandomValues: read(() => typeof crypto.getRandomValues)},\n    application: {jquery: read(() => typeof jQuery === "function" ? jQuery.fn.jquery : null),\n      hcaptcha: read(() => typeof hcaptcha), refreshCaptcha: read(() => typeof RefreshCaptcha),\n      hcaptchaMethods: read(() => typeof hcaptcha === \'object\' ?\n        Object.fromEntries([\'render\',\'execute\',\'reset\',\'getResponse\'].map(k => [k, typeof hcaptcha[k]])) : {}),\n      responseLengths: [...document.querySelectorAll(\'[name="h-captcha-response"],[name="g-recaptcha-response"]\')]\n        .map(e => ({name: e.name, length: e.value.length})),\n      checkbox: read(() => {\n        const e = document.querySelector(\'#checkbox[role="checkbox"],[role="checkbox"]\');\n        return e ? {role: e.getAttribute("role"), checked: e.getAttribute("aria-checked"),\n          label: e.getAttribute("aria-label"), rect: rect(e)} : null;\n      })},\n    scripts: [...document.scripts].map(e => ({src: e.src, type: e.type, async: e.async})),\n    frames: [...document.querySelectorAll("iframe")].map(e => ({src: e.src, title: e.title,\n      rect: read(() => rect(e)), display: read(() => getComputedStyle(e).display),\n      visibility: read(() => getComputedStyle(e).visibility)})),\n    bodyText: text(document.body).replace(/\\s+/g, \' \').trim().slice(0, 2500),\n    resources: read(() => performance.getEntriesByType("resource").map(e => ({\n      name: e.name, initiatorType: e.initiatorType, duration: e.duration,\n      transferSize: e.transferSize, responseEnd: e.responseEnd}))),\n    errors: globalThis.__environmentErrors || []\n  };\n})()\n'
+def scrollbar_environment_checks(Context):
+    """Exercise overflow geometry instead of comparing only an empty viewport."""
+    checks = {}
+
+    def record(name, actual, expected):
+        checks[name] = {'passed': actual == expected, 'actual': actual, 'expected': expected}
+
+    dimensions = '''[innerWidth,innerHeight,document.documentElement.clientWidth,
+        document.documentElement.clientHeight,document.documentElement.scrollWidth]'''
+    tall = '<!doctype html><style>body{margin:0;height:3000px}</style>'
+    try:
+        with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+            ctx.configure_environment({'viewport': {'width': 414, 'height': 774}})
+            ctx.load_page('https://fixture.test/', tall)
+            record('scrollbar_vertical_overflow_no_spurious_horizontal',
+                   ctx.eval(dimensions), [414, 774, 397, 774, 397])
+            ctx.eval('document.body.style.height="1px";void 0;')
+            record('scrollbar_overflow_removed_invalidates_layout',
+                   ctx.eval(dimensions), [414, 774, 414, 774, 414])
+            ctx.eval('document.body.style.height="3000px";void 0;')
+            record('scrollbar_overflow_added_invalidates_layout',
+                   ctx.eval(dimensions), [414, 774, 397, 774, 397])
+            ctx.eval('document.documentElement.style.scrollbarWidth="none";void 0;')
+            record('scrollbar_root_none_reserves_no_space',
+                   ctx.eval(dimensions), [414, 774, 414, 774, 414])
+            record('scrollbar_root_none_remains_scrollable', ctx.eval(
+                'scrollTo(0,120);scrollY===120 && document.documentElement.scrollHeight===3000'), True)
+            ctx.eval('document.documentElement.style.scrollbarWidth="auto";'
+                     'document.body.style.scrollbarWidth="none";void 0;')
+            record('scrollbar_body_none_does_not_propagate_to_viewport',
+                   ctx.eval(dimensions), [414, 774, 397, 774, 397])
+            record('scrollbar_fixture_uses_no_external_network',
+                   any(not e.get('matched') for e in ctx.net_log()), False)
+        with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+            ctx.configure_environment({'viewport': {'width': 414, 'height': 774, 'scrollbarWidth': 0}})
+            rejected = 0
+            for invalid in [None, True, '0', [], -1, 65, float('nan'), float('inf')]:
+                try:
+                    ctx.configure_environment({'viewport': {'width': 500, 'scrollbarWidth': invalid}})
+                except Exception:
+                    rejected += 1
+            state = ctx.configure_environment({'navigator': {'language': 'zh-CN'}})
+            record('scrollbar_invalid_configuration_is_atomic',
+                   [rejected, state['viewport']['width'], state['viewport']['scrollbarWidth']], [8, 414, 0])
+            ctx.put_resource('https://child.fixture.test/', tall,
+                             headers=[['Content-Type', 'text/html']])
+            ctx.load_page('https://fixture.test/', tall +
+                '<iframe style="width:320px;height:240px;border:0" src="https://child.fixture.test/"></iframe>')
+            record('scrollbar_overlay_root_keeps_viewport',
+                   ctx.eval(dimensions), [414, 774, 414, 774, 414])
+            record('scrollbar_overlay_inherited_by_frame', ctx.eval(
+                'document.querySelector("iframe").contentWindow.eval('+json.dumps(dimensions)+')'),
+                [320, 240, 320, 240, 320])
+            ctx.load_page('https://next.fixture.test/', tall)
+            record('scrollbar_overlay_survives_navigation',
+                   ctx.eval(dimensions), [414, 774, 414, 774, 414])
+            record('scrollbar_overlay_remains_scrollable', ctx.eval(
+                'scrollTo(0,120);scrollY===120 && document.documentElement.scrollHeight===3000'), True)
+        scroller = '''<!doctype html><style>body{margin:0}
+            #s{width:100px;height:100px;overflow:scroll}
+            #s>div{width:300px;height:300px}</style><div id="s"><div></div></div>'''
+        for width in (17, 12, 0):
+            with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+                ctx.configure_environment({'viewport': {'scrollbarWidth': width}})
+                ctx.load_page('https://fixture.test/', scroller)
+                read = '(()=>{const s=document.getElementById("s");return [s.clientWidth,s.clientHeight,s.scrollWidth,s.scrollHeight]})()'
+                record('scrollbar_nested_width_'+str(width), ctx.eval(read), [100-width, 100-width, 300, 300])
+                ctx.eval('document.getElementById("s").style.scrollbarWidth="none";void 0;')
+                record('scrollbar_nested_none_'+str(width), ctx.eval(read), [100, 100, 300, 300])
+    except Exception as exc:
+        checks['scrollbar_layout_execution'] = {'passed': False, 'error': str(exc)}
+    return checks
+
+
+MEMORY_SNAPSHOT = '(() => {\n  const read = fn => {\n    try {\n      const value = fn();\n      return value === undefined ? {unavailable: true} : value;\n    } catch (e) { return {error: String(e)}; }\n  };\n  const text = node => {\n    if (!node) return \'\';\n    if (node.nodeType === 3) return node.nodeValue || \'\';\n    if ([\'SCRIPT\',\'STYLE\',\'NOSCRIPT\',\'TEMPLATE\'].includes(node.nodeName)) return \'\';\n    return [...node.childNodes].map(text).join(\' \');\n  };\n  const rect = e => {\n    const r = e.getBoundingClientRect();\n    return {x: r.x, y: r.y, width: r.width, height: r.height};\n  };\n  const graphics = () => {\n    const first = document.createElement(\'canvas\').getContext(\'webgl\');\n    const second = document.createElement(\'canvas\').getContext(\'webgl2\');\n    if (!first || !second) return {error:\'WebGL context unavailable\'};\n    const d = first.getExtension(\'WEBGL_debug_renderer_info\');\n    const attributes = first.getContextAttributes();\n    return {vendor:first.getParameter(first.VENDOR),renderer:first.getParameter(first.RENDERER),\n      version:first.getParameter(first.VERSION),glslVersion:first.getParameter(first.SHADING_LANGUAGE_VERSION),\n      unmaskedVendor:d?first.getParameter(d.UNMASKED_VENDOR_WEBGL):null,\n      unmaskedRenderer:d?first.getParameter(d.UNMASKED_RENDERER_WEBGL):null,\n      version2:second.getParameter(second.VERSION),glslVersion2:second.getParameter(second.SHADING_LANGUAGE_VERSION),\n      attributes:Object.fromEntries([\'alpha\',\'antialias\',\'depth\',\'failIfMajorPerformanceCaveat\',\n        \'powerPreference\',\'premultipliedAlpha\',\'preserveDrawingBuffer\',\'stencil\'].map(k=>[k,attributes[k]])),\n      extensions:first.getSupportedExtensions(),extensions2:second.getSupportedExtensions(),\n      limits:Object.fromEntries([3379,34076,34024,34921,34930,35660,35661,36347,36349,36348]\n        .map(k=>[String(k),first.getParameter(k)]))};\n  };\n  const globals = ["fetch", "XMLHttpRequest", "Worker", "SharedWorker", "MessageChannel",\n    "MessagePort", "MutationObserver", "ResizeObserver", "IntersectionObserver",\n    "OffscreenCanvas", "WebGLRenderingContext", "WebGL2RenderingContext", "AudioContext",\n    "RTCPeerConnection", "crypto", "WebAssembly", "indexedDB", "localStorage",\n    "sessionStorage", "CSS", "matchMedia", "requestAnimationFrame", "structuredClone"];\n  const scrollbarWidth = () => {\n    const probe = document.createElement(\'div\');\n    probe.style.cssText = \'position:absolute;left:-10000px;top:-10000px;width:100px;height:100px;overflow:scroll;border:0;padding:0;visibility:hidden\';\n    (document.body || document.documentElement).appendChild(probe);\n    try { return probe.offsetWidth - probe.clientWidth; }\n    finally { probe.remove(); }\n  };\n  return {\n    url: location.href, title: document.title, readyState: document.readyState,\n    secure: isSecureContext,\n    navigator: Object.fromEntries(["userAgent", "appVersion", "platform", "language",\n      "languages", "hardwareConcurrency", "deviceMemory", "maxTouchPoints", "vendor", "productSub",\n      "webdriver", "cookieEnabled", "onLine", "appCodeName", "appName", "product", "vendorSub",\n      "oscpu", "buildID", "doNotTrack", "pdfViewerEnabled", "globalPrivacyControl"].map(k => [k, read(() => navigator[k])])),\n    screen: Object.fromEntries(["width", "height", "availWidth", "availHeight", "availLeft",\n      "availTop", "colorDepth", "pixelDepth", "top", "left"].map(k => [k, read(() => screen[k])])),\n    viewport: {width: innerWidth, height: innerHeight, devicePixelRatio,\n      scrollbarWidth: read(scrollbarWidth)},\n    locale: {timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,\n      osLocale: Intl.DateTimeFormat().resolvedOptions().locale},\n    webgl: read(graphics),\n    webgpu: {exposed: read(() => \'gpu\' in navigator)},\n    input: {touchEvents: read(() => typeof TouchEvent === \'function\' ? \'enabled\' : \'disabled\')},\n    capabilities: Object.fromEntries(globals.map(k => [k, read(() => typeof globalThis[k])])),\n    crypto: {subtle: read(() => typeof crypto.subtle),\n      getRandomValues: read(() => typeof crypto.getRandomValues)},\n    application: {jquery: read(() => typeof jQuery === "function" ? jQuery.fn.jquery : null),\n      hcaptcha: read(() => typeof hcaptcha), refreshCaptcha: read(() => typeof RefreshCaptcha),\n      hcaptchaMethods: read(() => typeof hcaptcha === \'object\' ?\n        Object.fromEntries([\'render\',\'execute\',\'reset\',\'getResponse\'].map(k => [k, typeof hcaptcha[k]])) : {}),\n      responseLengths: [...document.querySelectorAll(\'[name="h-captcha-response"],[name="g-recaptcha-response"]\')]\n        .map(e => ({name: e.name, length: e.value.length})),\n      checkbox: read(() => {\n        const e = document.querySelector(\'#checkbox[role="checkbox"],[role="checkbox"]\');\n        return e ? {role: e.getAttribute("role"), checked: e.getAttribute("aria-checked"),\n          label: e.getAttribute("aria-label"), rect: rect(e)} : null;\n      })},\n    scripts: [...document.scripts].map(e => ({src: e.src, type: e.type, async: e.async})),\n    frames: [...document.querySelectorAll("iframe")].map(e => ({src: e.src, title: e.title,\n      rect: read(() => rect(e)), display: read(() => getComputedStyle(e).display),\n      visibility: read(() => getComputedStyle(e).visibility)})),\n    bodyText: text(document.body).replace(/\\s+/g, \' \').trim().slice(0, 2500),\n    resources: read(() => performance.getEntriesByType("resource").map(e => ({\n      name: e.name, initiatorType: e.initiatorType, duration: e.duration,\n      transferSize: e.transferSize, responseEnd: e.responseEnd}))),\n    errors: globalThis.__environmentErrors || []\n  };\n})()\n'
 
 CONFIG = {'navigator': {'userAgent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:158.0) Gecko/20100101 Firefox/158.0', 'appVersion': '5.0 (Windows)', 'platform': 'Win32', 'language': 'en-US', 'languages': ['en-US', 'en'], 'hardwareConcurrency': 12, 'maxTouchPoints': 0}, 'screen': {'width': 1366, 'height': 768, 'availWidth': 1366, 'availHeight': 720, 'availLeft': 0, 'availTop': 0, 'colorDepth': 24, 'pixelDepth': 24}, 'viewport': {'width': 1360, 'height': 876, 'devicePixelRatio': 1}, 'locale': {'timezone': 'Asia/Shanghai', 'osLocale': 'en-US'}}
 

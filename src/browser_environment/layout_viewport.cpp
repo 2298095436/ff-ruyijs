@@ -7,6 +7,12 @@ bool Environment::ReadLayoutViewport(double* width, double* height, double* x, d
   *x = state_->scrollX; *y = state_->scrollY;
   return true;
 }
+bool Environment::ReadLayoutScrollbarWidth(double* width) {
+  JS::RootedValue value(state_->cx);
+  if (!state_->Read(Kind::Viewport, kViewportScrollbarWidth, ValueType::Number, &value)) return false;
+  *width = value.toNumber();
+  return true;
+}
 bool Environment::ScrollViewportTo(double x, double y) {
   return ScrollWindowTo(*state_, x, y);
 }

@@ -83,6 +83,9 @@ bool ReadField(JSContext* cx, JS::HandleValue value, Kind kind, uint32_t field,
         (result->number <= 0 || result->number > 8))
       return Error(cx, "devicePixelRatio must be greater than 0 and at most 8",
                    JSEXN_RANGEERR);
+    if (kind == Kind::Viewport && field == kViewportScrollbarWidth &&
+        (result->number < 0 || result->number > 64))
+      return Error(cx, "scrollbarWidth must be in 0..64 CSS pixels", JSEXN_RANGEERR);
     // Storage bytes are non-negative; a negative estimate is meaningless.
     if (kind == Kind::Storage && result->number < 0)
       return Error(cx, "Storage byte count must not be negative", JSEXN_RANGEERR);
