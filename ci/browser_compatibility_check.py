@@ -473,8 +473,12 @@ def memory_environment_checks(Context, snapshot=None):
                 {'rejected':4, 'policy':'enabled'})
             record('touch_exposure_independent_of_point_count', ctx.eval(
                 'navigator.maxTouchPoints===0 && typeof TouchEvent==="function"'), True)
+        with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+            ctx.configure_environment({'input':{'touchEvents':'enabled'}})
             ctx.configure_environment({'input':{'touchEvents':'disabled'}})
             record('touch_exposure_explicit_disable', ctx.eval('typeof TouchEvent'), 'undefined')
+        with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+            ctx.configure_environment({'input':{'touchEvents':'disabled'}})
             ctx.configure_environment({'input':{'touchEvents':'enabled'}})
             ctx.load_page('https://fixture.test/', '<iframe></iframe>')
             record('touch_exposure_frame_inheritance', ctx.eval(
