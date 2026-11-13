@@ -97,3 +97,32 @@ extern const JSPropertySpec kTouchListProperties[] = {
 extern const JSFunctionSpec kTouchListMethods[] = {
   JS_FN("item", Item, 1, JSPROP_ENUMERATE), JS_FS_END};
 }
+
+namespace ruyijs::interaction {
+bool Realm::CreateLegacyTouchList(const JS::HandleValueArray& args, JS::MutableHandleValue result) {
+  State& state = *state_;
+  JSContext* cx = state.cx;
+  JSAutoRealm enter(cx, state.page);
+  JS::RootedObject list(cx);
+  if (args.length() == 1) {
+    JS::RootedValue first(cx, args[0]);
+    if (!JS_WrapValue(cx, &first)) return false;
+    JSObject* raw = first.isObject() ? js::CheckedUnwrapStatic(&first.toObject()) : nullptr;
+    if (!IsTouch(raw)) {
+      if (first.isNullOrUndefined())
+        return Error(cx, "TypeError", "createTouchList requires a Touch or iterable");
+      if (!ConvertTouchSequence(state, first, &list)) return false;
+      result.setObject(*list);
+      return true;
+    }
+  }
+  if (!NewTouchList(state, &list)) return false;
+  for (unsigned i = 0; i < args.length(); ++i) {
+    JS::RootedValue member(cx, args[i]);
+    if (!JS_WrapValue(cx, &member) || !TouchReceiver(cx, member) ||
+        !AppendTouch(cx, list, member)) return false;
+  }
+  result.setObject(*list);
+  return true;
+}
+}

@@ -630,8 +630,32 @@ TOUCH_HANDLER_SOURCE = '''(()=>{
   catch(e){factory=e.name}
   return {handlers:objects.map(o=>names.map(n=>n in o)),
     defaults:objects.map(o=>names.every(n=>o[n]===null)),
-    elementPrototypeOwns:Object.hasOwn(Element.prototype,'ontouchstart'),factory};
+    elementPrototypeOwns:Object.hasOwn(Element.prototype,'ontouchstart'),factory,
+    factories:[typeof document.createTouch,typeof document.createTouchList]};
 })()'''
+
+TOUCH_FACTORY_SOURCE = '''(()=>{
+  const target=document.createElement('div');document.body.append(target);
+  const NativeTouch=Touch;
+  const t=document.createTouch(window,target,7,11,12,21,22,31,32,41,42,10.25,0.5);
+  const empty=document.createTouch(),a=document.createTouchList(),b=document.createTouchList(t),
+    c=document.createTouchList(t,t),d=document.createTouchList(new Set([t]));
+  const e=document.createEvent('TouchEvent');
+  e.initTouchEvent('touchstart',true,true,window,0,false,false,false,false,b,b,b);
+  const values={touch:t instanceof NativeTouch,target:t.target===target,
+    coordinates:[t.identifier,t.pageX,t.pageY,t.screenX,t.screenY,t.clientX,t.clientY,
+      t.radiusX,t.radiusY,t.rotationAngle,t.force],
+    emptyTouch:[empty instanceof NativeTouch,empty.target,empty.identifier,empty.clientX,empty.force],
+    lists:[a.length,b.length,c.length,d.length,b instanceof TouchList,b.item(0)===t,
+      b[0]===t,b.item(1),Array.from(d)[0]===t],
+    event:[e.type,e.isTrusted,e.touches.length,e.touches[0]===t]};
+  target.remove();return values;
+})()'''
+
+TOUCH_FACTORY_EXPECTED = dict(touch=True,target=True,
+    coordinates=[7,11,12,21,22,31,32,41,42,10.25,0.5],
+    emptyTouch=[True,None,0,0,0],lists=[0,1,2,1,True,True,True,None,True],
+    event=['touchstart',False,1,True])
 
 
 def touch_handler_environment_checks(Context):
@@ -642,9 +666,11 @@ def touch_handler_environment_checks(Context):
         checks[name] = {'passed': actual == expected, 'actual': actual, 'expected': expected}
 
     enabled = dict(handlers=[[True]*4 for _ in range(5)], defaults=[True]*5,
-                   elementPrototypeOwns=False, factory=[True, '', False, 0])
+                   elementPrototypeOwns=False, factory=[True, '', False, 0],
+                   factories=['function','function'])
     absent = dict(handlers=[[False]*4 for _ in range(5)], defaults=[False]*5,
-                  elementPrototypeOwns=False, factory='NotSupportedError')
+                  elementPrototypeOwns=False, factory='NotSupportedError',
+                  factories=['undefined','undefined'])
     html = '''<!doctype html><button id="t" style="width:80px;height:40px"
         ontouchstart="window.attributeSeen++">Tap</button><script>
         window.attributeSeen=0;window.seen=[];window.activations=0;
@@ -690,6 +716,14 @@ def touch_handler_environment_checks(Context):
                     if(!d||typeof d.set!=='function')return false;
                     try{d.set.call({},()=>{});return false}
                     catch(e){return e instanceof TypeError}})()'''), True)
+                record('touch_factories_'+label+'_native_values_and_lists',
+                       evaluate(TOUCH_FACTORY_SOURCE), TOUCH_FACTORY_EXPECTED)
+                record('touch_factories_'+label+'_reject_invalid_arguments', evaluate('''(()=>{
+                    return [()=>document.createTouch({},null),()=>document.createTouch(window,{}),
+                      ()=>document.createTouchList(null),()=>document.createTouchList(undefined),
+                      ()=>document.createTouchList([{}]),()=>Document.prototype.createTouch.call({})]
+                      .every(fn=>{try{fn();return false}catch(e){return e instanceof TypeError}})
+                    })()'''), True)
         for policy in ('auto', 'disabled'):
             with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
                 ctx.configure_environment({'input': {'touchEvents': 'enabled'}})

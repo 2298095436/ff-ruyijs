@@ -68,6 +68,8 @@ class Realm {
   // descriptors and identities from the independent Environment decision.
   bool ConfigureTouchExposure(bool enabled);
   bool ConfigureLegacyTouchExposure(bool enabled);
+  bool CreateLegacyTouch(const JS::HandleValueArray&, JS::MutableHandleValue);
+  bool CreateLegacyTouchList(const JS::HandleValueArray&, JS::MutableHandleValue);
   // Removes or restores the [SecureContext] derived event interfaces for the
   // realm's current secure-context state (runtime/secure_exposure.cpp).
   bool ConfigureExposure();

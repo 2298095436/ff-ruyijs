@@ -1,4 +1,5 @@
 #include "interaction/touch.h"
+#include "interaction/event_keyboard.h"
 #include "interaction/event_creation.h"
 #include "runtime/native_constructor_trace.h"
 #include "js/Conversions.h"
@@ -13,7 +14,7 @@ namespace ruyijs::interaction {
 const JSClass kTouchClass = {"Touch", JSCLASS_HAS_RESERVED_SLOTS(kTouchSlotCount)};
 bool IsTouch(JSObject* object) {
   return object && JS::GetClass(object) == &kTouchClass &&
-      JS::GetReservedSlot(object, kTouchOriginalTarget).isObject();
+      JS::GetReservedSlot(object, kTouchOriginalTarget).isObjectOrNull();
 }
 JSObject* TouchReceiver(JSContext* cx, JS::HandleValue value) {
   JSObject* object = value.isObject() ? js::CheckedUnwrapStatic(&value.toObject()) : nullptr;
@@ -125,5 +126,53 @@ bool TouchValueConstructor(JSContext* cx, unsigned argc, JS::Value* vp) {
   if (state) state->Observe("Touch", "constructor", int(ApiAccess::Construct));
   args.rval().setObject(*object);
   return trace.Finish(true);
+}
+}
+
+namespace ruyijs::interaction {
+bool Realm::CreateLegacyTouch(const JS::HandleValueArray& args, JS::MutableHandleValue result) {
+  State& state = *state_;
+  JSContext* cx = state.cx;
+  JSAutoRealm enter(cx, state.page);
+  JS::RootedValueArray<13> input(cx);
+  for (unsigned i = 0; i < 13; ++i) {
+    input[i].set(i < args.length() ? args[i].get() : JS::UndefinedValue());
+    if (!JS_WrapValue(cx, input[i])) return false;
+  }
+  JS::RootedValue view(cx);
+  if (!KeyboardView(cx, input[0], &view)) return false;
+  JS::RootedValue target(cx, input[1]);
+  if (target.isNullOrUndefined()) target.setNull();
+  else {
+    JS::RootedObject raw(cx, target.isObject()
+        ? js::CheckedUnwrapStatic(&target.toObject()) : nullptr);
+    State* owner = raw ? Owner(cx, raw, false) : nullptr;
+    if (!owner || !owner->target(raw))
+      return Error(cx, "TypeError", "createTouch target requires an EventTarget");
+  }
+  JS::RootedValueArray<kTouchSlotCount> values(cx);
+  const unsigned slots[] = {kTouchIdentifier, kTouchPageX, kTouchPageY,
+      kTouchScreenX, kTouchScreenY, kTouchClientX, kTouchClientY,
+      kTouchRadiusX, kTouchRadiusY, kTouchRotation, kTouchForce};
+  for (unsigned i = 0; i < 11; ++i) {
+    JS::RootedValue value(cx, input[i+2]);
+    if (value.isUndefined()) value.setInt32(0);
+    if (i < 9) {
+      int32_t converted;
+      if (!JS::ToInt32(cx, value, &converted)) return false;
+      values[slots[i]].setInt32(converted);
+    } else {
+      Field field{"", slots[i], true};
+      if (!Number(cx, value, field, values[slots[i]])) return false;
+    }
+  }
+  values[kTouchTarget].set(target);
+  values[kTouchOriginalTarget].set(target);
+  JS::RootedObject prototype(cx, state.touchPrototype);
+  JS::RootedObject object(cx, JS_NewObjectWithGivenProto(cx, &kTouchClass, prototype));
+  if (!object) return false;
+  for (unsigned i = 0; i < kTouchSlotCount; ++i) JS::SetReservedSlot(object, i, values[i]);
+  result.setObject(*object);
+  return true;
 }
 }

@@ -473,6 +473,7 @@ bool DocumentReachability(State&, std::set<NodeKey, NodeKeyLess>*, std::vector<N
 // source string of a content attribute.
 bool InstallEventHandlers(State&);
 bool ConfigureTouchHandlers(State&, bool enabled);
+bool ConfigureTouchFactories(State&, bool enabled);
 bool WriteEventHandler(State&, JS::HandleObject wrapper, const char* name, JS::HandleValue value);
 bool ReadEventHandler(State&, JS::HandleObject wrapper, const char* name, JS::MutableHandleValue result);
 bool HasEventHandler(JS::HandleObject wrapper, const char* name, JSContext*, bool* present);

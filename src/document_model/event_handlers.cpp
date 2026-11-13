@@ -267,6 +267,7 @@ bool ConfigureTouchHandlers(State& state, bool enabled) {
       } else if (!JS_DeleteProperty(state.cx, prototype, name)) return false;
     }
   }
+  if (!ConfigureTouchFactories(state, enabled)) return false;
   state.touchHandlersEnabled = enabled;
   return true;
 }
