@@ -8,6 +8,7 @@
 #include "document_model/event_handler_names.h"
 #include "document_model/body_frameset_handlers.h"
 #include "runtime/exception_capture.h"
+#include "runtime/page_helpers.h"
 #include "interaction/realm.h"
 #include "js/Exception.h"
 #include "jsfriendapi.h"
@@ -27,14 +28,19 @@ constexpr const char* kInterfaces[] = {"HTMLElement", "SVGElement", "MathMLEleme
 constexpr int32_t kStride = 1024;
 // Type ids index the Document list (it holds the global list), then Element's pair.
 const char* HandlerName(int32_t id) {
-  return size_t(id) < kDocumentEventHandlerCount ? kDocumentEventHandlerNames[id]
-                                                 : kElementEventHandlerNames[id - kDocumentEventHandlerCount];
+  if (size_t(id) < kDocumentEventHandlerCount) return kDocumentEventHandlerNames[id];
+  id -= kDocumentEventHandlerCount;
+  if (size_t(id) < kElementEventHandlerCount) return kElementEventHandlerNames[id];
+  return kTouchEventHandlerNames[id - kElementEventHandlerCount];
 }
 int32_t HandlerId(const char* name) {
   for (size_t i = 0; i < kDocumentEventHandlerCount; ++i)
     if (!std::strcmp(kDocumentEventHandlerNames[i], name)) return int32_t(i);
   for (size_t i = 0; i < kElementEventHandlerCount; ++i)
     if (!std::strcmp(kElementEventHandlerNames[i], name)) return int32_t(kDocumentEventHandlerCount + i);
+  for (size_t i = 0; i < kTouchEventHandlerCount; ++i)
+    if (!std::strcmp(kTouchEventHandlerNames[i], name))
+      return int32_t(kDocumentEventHandlerCount + kElementEventHandlerCount + i);
   return -1;
 }
 bool Brand(Kind kind, const NodeSnapshot& node) {
@@ -246,6 +252,22 @@ bool InstallEventHandlers(State& state) {
       }
     }
   }
+  return true;
+}
+bool ConfigureTouchHandlers(State& state, bool enabled) {
+  if (enabled == state.touchHandlersEnabled) return true;
+  for (int kind = HTML; kind <= Doc; ++kind) {
+    JS::RootedObject prototype(state.cx, state.Find(kInterfaces[kind])->prototype);
+    for (size_t i = 0; i < kTouchEventHandlerCount; ++i) {
+      const char* name = kTouchEventHandlerNames[i];
+      if (enabled) {
+        if (!state.Accessor(kInterfaces[kind], name, Get,
+                            kind * kStride + HandlerId(name), Set) ||
+            !state.helpers.Accessor(kInterfaces[kind], prototype, name)) return false;
+      } else if (!JS_DeleteProperty(state.cx, prototype, name)) return false;
+    }
+  }
+  state.touchHandlersEnabled = enabled;
   return true;
 }
 }  // namespace ruyijs::document_model

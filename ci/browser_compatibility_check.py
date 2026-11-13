@@ -541,6 +541,7 @@ def memory_environment_checks(Context, snapshot=None):
     except Exception as exc:
         checks['touch_input_execution'] = {'passed':False, 'error':str(exc)}
     checks.update(scrollbar_environment_checks(Context))
+    checks.update(touch_handler_environment_checks(Context))
     return checks
 
 
@@ -618,7 +619,92 @@ def scrollbar_environment_checks(Context):
     return checks
 
 
-MEMORY_SNAPSHOT = '(() => {\n  const read = fn => {\n    try {\n      const value = fn();\n      return value === undefined ? {unavailable: true} : value;\n    } catch (e) { return {error: String(e)}; }\n  };\n  const text = node => {\n    if (!node) return \'\';\n    if (node.nodeType === 3) return node.nodeValue || \'\';\n    if ([\'SCRIPT\',\'STYLE\',\'NOSCRIPT\',\'TEMPLATE\'].includes(node.nodeName)) return \'\';\n    return [...node.childNodes].map(text).join(\' \');\n  };\n  const rect = e => {\n    const r = e.getBoundingClientRect();\n    return {x: r.x, y: r.y, width: r.width, height: r.height};\n  };\n  const graphics = () => {\n    const first = document.createElement(\'canvas\').getContext(\'webgl\');\n    const second = document.createElement(\'canvas\').getContext(\'webgl2\');\n    if (!first || !second) return {error:\'WebGL context unavailable\'};\n    const d = first.getExtension(\'WEBGL_debug_renderer_info\');\n    const attributes = first.getContextAttributes();\n    return {vendor:first.getParameter(first.VENDOR),renderer:first.getParameter(first.RENDERER),\n      version:first.getParameter(first.VERSION),glslVersion:first.getParameter(first.SHADING_LANGUAGE_VERSION),\n      unmaskedVendor:d?first.getParameter(d.UNMASKED_VENDOR_WEBGL):null,\n      unmaskedRenderer:d?first.getParameter(d.UNMASKED_RENDERER_WEBGL):null,\n      version2:second.getParameter(second.VERSION),glslVersion2:second.getParameter(second.SHADING_LANGUAGE_VERSION),\n      attributes:Object.fromEntries([\'alpha\',\'antialias\',\'depth\',\'failIfMajorPerformanceCaveat\',\n        \'powerPreference\',\'premultipliedAlpha\',\'preserveDrawingBuffer\',\'stencil\'].map(k=>[k,attributes[k]])),\n      extensions:first.getSupportedExtensions(),extensions2:second.getSupportedExtensions(),\n      limits:Object.fromEntries([3379,34076,34024,34921,34930,35660,35661,36347,36349,36348]\n        .map(k=>[String(k),first.getParameter(k)]))};\n  };\n  const globals = ["fetch", "XMLHttpRequest", "Worker", "SharedWorker", "MessageChannel",\n    "MessagePort", "MutationObserver", "ResizeObserver", "IntersectionObserver",\n    "OffscreenCanvas", "WebGLRenderingContext", "WebGL2RenderingContext", "AudioContext",\n    "RTCPeerConnection", "crypto", "WebAssembly", "indexedDB", "localStorage",\n    "sessionStorage", "CSS", "matchMedia", "requestAnimationFrame", "structuredClone"];\n  const scrollbarWidth = () => {\n    const probe = document.createElement(\'div\');\n    probe.style.cssText = \'position:absolute;left:-10000px;top:-10000px;width:100px;height:100px;overflow:scroll;border:0;padding:0;visibility:hidden\';\n    (document.body || document.documentElement).appendChild(probe);\n    try { return probe.offsetWidth - probe.clientWidth; }\n    finally { probe.remove(); }\n  };\n  return {\n    url: location.href, title: document.title, readyState: document.readyState,\n    secure: isSecureContext,\n    navigator: Object.fromEntries(["userAgent", "appVersion", "platform", "language",\n      "languages", "hardwareConcurrency", "deviceMemory", "maxTouchPoints", "vendor", "productSub",\n      "webdriver", "cookieEnabled", "onLine", "appCodeName", "appName", "product", "vendorSub",\n      "oscpu", "buildID", "doNotTrack", "pdfViewerEnabled", "globalPrivacyControl"].map(k => [k, read(() => navigator[k])])),\n    screen: Object.fromEntries(["width", "height", "availWidth", "availHeight", "availLeft",\n      "availTop", "colorDepth", "pixelDepth", "top", "left"].map(k => [k, read(() => screen[k])])),\n    viewport: {width: innerWidth, height: innerHeight, devicePixelRatio,\n      scrollbarWidth: read(scrollbarWidth)},\n    locale: {timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,\n      osLocale: Intl.DateTimeFormat().resolvedOptions().locale},\n    webgl: read(graphics),\n    webgpu: {exposed: read(() => \'gpu\' in navigator)},\n    input: {touchEvents: read(() => typeof TouchEvent === \'function\' ? \'enabled\' : \'disabled\')},\n    capabilities: Object.fromEntries(globals.map(k => [k, read(() => typeof globalThis[k])])),\n    crypto: {subtle: read(() => typeof crypto.subtle),\n      getRandomValues: read(() => typeof crypto.getRandomValues)},\n    application: {jquery: read(() => typeof jQuery === "function" ? jQuery.fn.jquery : null),\n      hcaptcha: read(() => typeof hcaptcha), refreshCaptcha: read(() => typeof RefreshCaptcha),\n      hcaptchaMethods: read(() => typeof hcaptcha === \'object\' ?\n        Object.fromEntries([\'render\',\'execute\',\'reset\',\'getResponse\'].map(k => [k, typeof hcaptcha[k]])) : {}),\n      responseLengths: [...document.querySelectorAll(\'[name="h-captcha-response"],[name="g-recaptcha-response"]\')]\n        .map(e => ({name: e.name, length: e.value.length})),\n      checkbox: read(() => {\n        const e = document.querySelector(\'#checkbox[role="checkbox"],[role="checkbox"]\');\n        return e ? {role: e.getAttribute("role"), checked: e.getAttribute("aria-checked"),\n          label: e.getAttribute("aria-label"), rect: rect(e)} : null;\n      })},\n    scripts: [...document.scripts].map(e => ({src: e.src, type: e.type, async: e.async})),\n    frames: [...document.querySelectorAll("iframe")].map(e => ({src: e.src, title: e.title,\n      rect: read(() => rect(e)), display: read(() => getComputedStyle(e).display),\n      visibility: read(() => getComputedStyle(e).visibility)})),\n    bodyText: text(document.body).replace(/\\s+/g, \' \').trim().slice(0, 2500),\n    resources: read(() => performance.getEntriesByType("resource").map(e => ({\n      name: e.name, initiatorType: e.initiatorType, duration: e.duration,\n      transferSize: e.transferSize, responseEnd: e.responseEnd}))),\n    errors: globalThis.__environmentErrors || []\n  };\n})()\n'
+TOUCH_HANDLER_SOURCE = '''(()=>{
+  const names=['ontouchstart','ontouchend','ontouchmove','ontouchcancel'];
+  const objects=[window,document,document.createElement('div'),
+    document.createElementNS('http://www.w3.org/2000/svg','svg'),
+    document.createElementNS('http://www.w3.org/1998/Math/MathML','math')];
+  let factory;
+  try {const e=document.createEvent('TouchEvent');
+    factory=[e instanceof TouchEvent,e.type,e.isTrusted,e.touches.length];}
+  catch(e){factory=e.name}
+  return {handlers:objects.map(o=>names.map(n=>n in o)),
+    defaults:objects.map(o=>names.every(n=>o[n]===null)),
+    elementPrototypeOwns:Object.hasOwn(Element.prototype,'ontouchstart'),factory};
+})()'''
+
+
+def touch_handler_environment_checks(Context):
+    """Exercise feature-gated subscription, IDL setters and actual input delivery."""
+    checks = {}
+
+    def record(name, actual, expected):
+        checks[name] = {'passed': actual == expected, 'actual': actual, 'expected': expected}
+
+    enabled = dict(handlers=[[True]*4 for _ in range(5)], defaults=[True]*5,
+                   elementPrototypeOwns=False, factory=[True, '', False, 0])
+    absent = dict(handlers=[[False]*4 for _ in range(5)], defaults=[False]*5,
+                  elementPrototypeOwns=False, factory='NotSupportedError')
+    html = '''<!doctype html><button id="t" style="width:80px;height:40px"
+        ontouchstart="window.attributeSeen++">Tap</button><script>
+        window.attributeSeen=0;window.seen=[];window.activations=0;
+        const t=document.getElementById('t');
+        t.addEventListener('click',()=>activations++);
+        if('ontouchstart' in window){
+          addEventListener('touchstart',e=>seen.push(['listener',e.isTrusted]));
+          document.ontouchend=function(e){seen.push(['document',e.isTrusted,this===document])};
+          window.ontouchend=function(e){seen.push(['window',e.isTrusted,this===window])};
+        }
+        </script>'''
+    try:
+        for frame in (False, True):
+            label = 'frame' if frame else 'page'
+            with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+                ctx.configure_environment({'input': {'touchEvents': 'enabled'},
+                                           'navigator': {'maxTouchPoints': 0}})
+                if frame:
+                    ctx.put_resource('https://child.fixture.test/', html,
+                                     headers=[['Content-Type', 'text/html']])
+                    ctx.load_page('https://fixture.test/', '<iframe src="https://child.fixture.test/"></iframe>')
+                    owner = 'document.querySelector("iframe").contentWindow'
+                else:
+                    ctx.load_page('https://fixture.test/', html)
+                    owner = 'window'
+                evaluate = lambda code: ctx.eval(owner+'.eval('+json.dumps(code)+')')
+                record('touch_handlers_'+label+'_exposure', evaluate(TOUCH_HANDLER_SOURCE), enabled)
+                ctx.tap(owner+'.document.getElementById("t")')
+                record('touch_handlers_'+label+'_feature_gated_native_delivery', evaluate('seen'),
+                       [['listener', True], ['document', True, True], ['window', True, True]])
+                record('touch_handlers_'+label+'_content_attribute', evaluate('attributeSeen'), 1)
+                record('touch_handlers_'+label+'_activation', evaluate('activations'), 1)
+                evaluate('document.getElementById("t").ontouchstart=function(){return false};void 0')
+                ctx.tap(owner+'.document.getElementById("t")')
+                record('touch_handlers_'+label+'_return_false_cancels_activation', evaluate('activations'), 1)
+                record('touch_handlers_'+label+'_setter_normalizes_primitive', evaluate(
+                    'document.ontouchend=42;document.ontouchend===null'), True)
+                record('touch_handlers_'+label+'_setter_rejects_wrong_receiver', evaluate('''(()=>{
+                    const d=Object.getOwnPropertyDescriptor(Document.prototype,'ontouchend');
+                    if(!d||typeof d.set!=='function')return false;
+                    try{d.set.call({},()=>{});return false}
+                    catch(e){return e instanceof TypeError}})()'''), True)
+        for policy in ('auto', 'disabled'):
+            with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+                ctx.configure_environment({'input': {'touchEvents': 'enabled'}})
+                ctx.configure_environment({'input': {'touchEvents': policy}})
+                ctx.load_page('https://fixture.test/', '')
+                record('touch_handlers_'+policy+'_removes_exposure', ctx.eval(TOUCH_HANDLER_SOURCE), absent)
+        with Context(timeout=30, proxy='http://127.0.0.1:9') as ctx:
+            ctx.configure_environment({'input': {'touchEvents': 'disabled'}})
+            ctx.configure_environment({'input': {'touchEvents': 'enabled'}})
+            ctx.load_page('https://first.fixture.test/', '')
+            ctx.load_page('http://next.fixture.test/', '')
+            record('touch_handlers_reenabled_and_navigation_inherited', ctx.eval(TOUCH_HANDLER_SOURCE), enabled)
+    except Exception as exc:
+        checks['touch_handlers_execution'] = {'passed': False, 'error': str(exc)}
+    return checks
+
+
+MEMORY_SNAPSHOT = '(() => {\n  const read = fn => {\n    try {\n      const value = fn();\n      return value === undefined ? {unavailable: true} : value;\n    } catch (e) { return {error: String(e)}; }\n  };\n  const text = node => {\n    if (!node) return \'\';\n    if (node.nodeType === 3) return node.nodeValue || \'\';\n    if ([\'SCRIPT\',\'STYLE\',\'NOSCRIPT\',\'TEMPLATE\'].includes(node.nodeName)) return \'\';\n    return [...node.childNodes].map(text).join(\' \');\n  };\n  const rect = e => {\n    const r = e.getBoundingClientRect();\n    return {x: r.x, y: r.y, width: r.width, height: r.height};\n  };\n  const graphics = () => {\n    const first = document.createElement(\'canvas\').getContext(\'webgl\');\n    const second = document.createElement(\'canvas\').getContext(\'webgl2\');\n    if (!first || !second) return {error:\'WebGL context unavailable\'};\n    const d = first.getExtension(\'WEBGL_debug_renderer_info\');\n    const attributes = first.getContextAttributes();\n    return {vendor:first.getParameter(first.VENDOR),renderer:first.getParameter(first.RENDERER),\n      version:first.getParameter(first.VERSION),glslVersion:first.getParameter(first.SHADING_LANGUAGE_VERSION),\n      unmaskedVendor:d?first.getParameter(d.UNMASKED_VENDOR_WEBGL):null,\n      unmaskedRenderer:d?first.getParameter(d.UNMASKED_RENDERER_WEBGL):null,\n      version2:second.getParameter(second.VERSION),glslVersion2:second.getParameter(second.SHADING_LANGUAGE_VERSION),\n      attributes:Object.fromEntries([\'alpha\',\'antialias\',\'depth\',\'failIfMajorPerformanceCaveat\',\n        \'powerPreference\',\'premultipliedAlpha\',\'preserveDrawingBuffer\',\'stencil\'].map(k=>[k,attributes[k]])),\n      extensions:first.getSupportedExtensions(),extensions2:second.getSupportedExtensions(),\n      limits:Object.fromEntries([3379,34076,34024,34921,34930,35660,35661,36347,36349,36348]\n        .map(k=>[String(k),first.getParameter(k)]))};\n  };\n  const globals = ["fetch", "XMLHttpRequest", "Worker", "SharedWorker", "MessageChannel",\n    "MessagePort", "MutationObserver", "ResizeObserver", "IntersectionObserver",\n    "OffscreenCanvas", "WebGLRenderingContext", "WebGL2RenderingContext", "AudioContext",\n    "RTCPeerConnection", "crypto", "WebAssembly", "indexedDB", "localStorage",\n    "sessionStorage", "CSS", "matchMedia", "requestAnimationFrame", "structuredClone"];\n  const scrollbarWidth = () => {\n    const probe = document.createElement(\'div\');\n    probe.style.cssText = \'position:absolute;left:-10000px;top:-10000px;width:100px;height:100px;overflow:scroll;border:0;padding:0;visibility:hidden\';\n    (document.body || document.documentElement).appendChild(probe);\n    try { return probe.offsetWidth - probe.clientWidth; }\n    finally { probe.remove(); }\n  };\n  return {\n    url: location.href, title: document.title, readyState: document.readyState,\n    secure: isSecureContext,\n    navigator: Object.fromEntries(["userAgent", "appVersion", "platform", "language",\n      "languages", "hardwareConcurrency", "deviceMemory", "maxTouchPoints", "vendor", "productSub",\n      "webdriver", "cookieEnabled", "onLine", "appCodeName", "appName", "product", "vendorSub",\n      "oscpu", "buildID", "doNotTrack", "pdfViewerEnabled", "globalPrivacyControl"].map(k => [k, read(() => navigator[k])])),\n    screen: Object.fromEntries(["width", "height", "availWidth", "availHeight", "availLeft",\n      "availTop", "colorDepth", "pixelDepth", "top", "left"].map(k => [k, read(() => screen[k])])),\n    viewport: {width: innerWidth, height: innerHeight, devicePixelRatio,\n      scrollbarWidth: read(scrollbarWidth)},\n    documentViewport: {client: read(() => [document.documentElement.clientWidth,\n      document.documentElement.clientHeight]), scroll: read(() => [document.documentElement.scrollWidth,\n      document.documentElement.scrollHeight])},\n    locale: {timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,\n      osLocale: Intl.DateTimeFormat().resolvedOptions().locale},\n    webgl: read(graphics),\n    webgpu: {exposed: read(() => \'gpu\' in navigator)},\n    input: {touchEvents: read(() => typeof TouchEvent === \'function\' ? \'enabled\' : \'disabled\')},\n    capabilities: Object.fromEntries(globals.map(k => [k, read(() => typeof globalThis[k])])),\n    crypto: {subtle: read(() => typeof crypto.subtle),\n      getRandomValues: read(() => typeof crypto.getRandomValues)},\n    application: {jquery: read(() => typeof jQuery === "function" ? jQuery.fn.jquery : null),\n      hcaptcha: read(() => typeof hcaptcha), refreshCaptcha: read(() => typeof RefreshCaptcha),\n      hcaptchaMethods: read(() => typeof hcaptcha === \'object\' ?\n        Object.fromEntries([\'render\',\'execute\',\'reset\',\'getResponse\'].map(k => [k, typeof hcaptcha[k]])) : {}),\n      responseLengths: [...document.querySelectorAll(\'[name="h-captcha-response"],[name="g-recaptcha-response"]\')]\n        .map(e => ({name: e.name, length: e.value.length})),\n      checkbox: read(() => {\n        const e = document.querySelector(\'#checkbox[role="checkbox"],[role="checkbox"]\');\n        return e ? {role: e.getAttribute("role"), checked: e.getAttribute("aria-checked"),\n          label: e.getAttribute("aria-label"), rect: rect(e)} : null;\n      })},\n    scripts: [...document.scripts].map(e => ({src: e.src, type: e.type, async: e.async})),\n    frames: [...document.querySelectorAll("iframe")].map(e => ({src: e.src, title: e.title,\n      rect: read(() => rect(e)), display: read(() => getComputedStyle(e).display),\n      visibility: read(() => getComputedStyle(e).visibility)})),\n    bodyText: text(document.body).replace(/\\s+/g, \' \').trim().slice(0, 2500),\n    resources: read(() => performance.getEntriesByType("resource").map(e => ({\n      name: e.name, initiatorType: e.initiatorType, duration: e.duration,\n      transferSize: e.transferSize, responseEnd: e.responseEnd}))),\n    errors: globalThis.__environmentErrors || []\n  };\n})()\n'
 
 CONFIG = {'navigator': {'userAgent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:158.0) Gecko/20100101 Firefox/158.0', 'appVersion': '5.0 (Windows)', 'platform': 'Win32', 'language': 'en-US', 'languages': ['en-US', 'en'], 'hardwareConcurrency': 12, 'maxTouchPoints': 0}, 'screen': {'width': 1366, 'height': 768, 'availWidth': 1366, 'availHeight': 720, 'availLeft': 0, 'availTop': 0, 'colorDepth': 24, 'pixelDepth': 24}, 'viewport': {'width': 1360, 'height': 876, 'devicePixelRatio': 1}, 'locale': {'timezone': 'Asia/Shanghai', 'osLocale': 'en-US'}}
 

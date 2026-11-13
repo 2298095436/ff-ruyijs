@@ -291,6 +291,7 @@ struct State final {
   bool TouchEventsEnabled(bool* result);
   // Windows content legacy default, independent of modern hardware exposure.
   bool LegacyTouchEventsEnabled() const;
+  bool windowTouchHandlersEnabled = false;
   bool Instance(Kind kind, JS::HandleObject parent);
   bool Globals();
   bool WindowMembers();

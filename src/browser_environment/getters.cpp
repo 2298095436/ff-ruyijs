@@ -70,9 +70,11 @@ bool State::TouchEventsEnabled(bool* result) {
   return false;
 }
 bool State::LegacyTouchEventsEnabled() const {
-  // Donor dom.w3c_touch_events.legacy_apis.enabled defaults to IS_ANDROID.
-  // This Windows content runtime has no system/document/pref override input.
-  return false;
+  // Firefox also enables legacy touch APIs for an explicit Enabled
+  // browsing-context override, independently of maxTouchPoints.
+  FieldValue value;
+  return (shared ? shared->model : model).Read(Kind::Input, 0, &value) &&
+         value.text == "enabled";
 }
 const char* InterfaceName(Kind kind) {
   switch (kind) {

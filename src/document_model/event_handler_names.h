@@ -227,5 +227,10 @@ inline constexpr const char* kElementEventHandlerNames[] = {
   "onfullscreenerror",
 };
 inline constexpr size_t kElementEventHandlerCount = 2;
+inline constexpr const char* kTouchEventHandlerNames[] = {
+  "ontouchstart", "ontouchend", "ontouchmove", "ontouchcancel"
+};
+inline constexpr size_t kTouchEventHandlerCount = 4;
 }
 #endif
+

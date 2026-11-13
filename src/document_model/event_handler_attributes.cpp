@@ -42,8 +42,11 @@ const char* MatchHandler(DomStringView name, const char* const* names, size_t co
   return nullptr;
 }
 // The content attribute names that map to an element's own handler.
-const char* AttributeHandler(DomStringView name) {
-  return MatchHandler(name, kGlobalEventHandlerNames, kGlobalEventHandlerCount);
+const char* AttributeHandler(State& state, DomStringView name) {
+  if (const char* match = MatchHandler(name, kGlobalEventHandlerNames, kGlobalEventHandlerCount))
+    return match;
+  return state.touchHandlersEnabled
+      ? MatchHandler(name, kTouchEventHandlerNames, kTouchEventHandlerCount) : nullptr;
 }
 // The content attribute names body/frameset reflect to their Window.
 const char* BodyFramesetHandler(DomStringView name) {
@@ -149,7 +152,7 @@ void EventHandlerAttributeChanged(State& state, NodeKey key, DomStringView name)
     if (!ApplyWindowHandler(state, key, handler)) Settle(state);
     return;
   }
-  handler = AttributeHandler(name);
+  handler = AttributeHandler(state, name);
   if (!handler) return;
   if (!Apply(state, key, handler)) Settle(state);
 }
@@ -171,7 +174,7 @@ void EventHandlerAttributesInserted(State& state, const std::vector<NodeKey>& in
           if (!ApplyWindowHandler(state, key, handler)) Settle(state);
           continue;
         }
-        handler = AttributeHandler(attribute.name);
+        handler = AttributeHandler(state, attribute.name);
         if (!handler) continue;
         // A node that moves keeps the handler its attribute already gave it.
         JS::RootedValue wrapped(state.cx);

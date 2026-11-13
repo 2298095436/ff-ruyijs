@@ -116,6 +116,7 @@ class Realm final {
   // Removes or restores this owner's [SecureContext] members for the realm's
   // current secure-context state (runtime/secure_exposure.cpp).
   bool ConfigureExposure();
+  bool ConfigureTouchHandlers(bool enabled);
 
   bool ThrowException(const char* name, const char* message);
   // Prepared native topology, target-to-outer; flags bit 0 is a closed root.

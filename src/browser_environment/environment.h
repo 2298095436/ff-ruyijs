@@ -156,6 +156,8 @@ class Environment final {
   // Both propagate initialization failure; neither installs browser properties.
   bool Prepare();
   bool TouchEventsEnabled(bool* result);
+  bool LegacyTouchEventsEnabled(bool* result);
+  bool ConfigureTouchHandlers();
   // Geometry reads the same private viewport/scroll source as Window scalars.
   bool ReadLayoutViewport(double* width, double* height, double* scrollX, double* scrollY);
   bool ReadLayoutScrollbarWidth(double* width);

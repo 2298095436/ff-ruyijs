@@ -193,6 +193,7 @@ struct State {
   JS::PersistentRootedObject touchPrototype, touchListPrototype;
   JS::PersistentRooted<JS::PropertyDescriptor> touchDescriptor, touchListDescriptor, touchEventDescriptor;
   bool touchInstalled = false, touchEnabled = false;
+  bool legacyTouchEnabled = false;
   JS::PersistentRootedObject transferPrototype, transferListPrototype, transferItemPrototype;
   // The two [LegacyNoInterfaceObject] helper shapes of DeviceMotionEvent
   // (DeviceAcceleration/DeviceRotationRate): no global constructor, one

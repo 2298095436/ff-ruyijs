@@ -67,6 +67,7 @@ class Realm {
   // Original touch interfaces are created once; visibility restores their saved
   // descriptors and identities from the independent Environment decision.
   bool ConfigureTouchExposure(bool enabled);
+  bool ConfigureLegacyTouchExposure(bool enabled);
   // Removes or restores the [SecureContext] derived event interfaces for the
   // realm's current secure-context state (runtime/secure_exposure.cpp).
   bool ConfigureExposure();

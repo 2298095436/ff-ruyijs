@@ -352,6 +352,11 @@ bool Realm::ThrowTypeError(const char* message) {
 }
 }
 namespace ruyijs::document_model {
+bool Realm::ConfigureTouchHandlers(bool enabled) {
+  State& s = *state_;
+  JSAutoRealm realm(s.cx, s.page);
+  return document_model::ConfigureTouchHandlers(s, enabled);
+}
 bool Realm::ConfigureExposure() {
   State& s = *state_;
   JSAutoRealm realm(s.cx, s.page);

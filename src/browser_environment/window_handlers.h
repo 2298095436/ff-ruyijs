@@ -11,6 +11,7 @@ enum HandlerStoreSlot : unsigned {
   kHandlerStoreSlots
 };
 bool InstallWindowHandlers(State&, interaction::Realm&);
+bool ConfigureWindowTouchHandlers(State&);
 bool InvokeWindowHandler(JSContext*, unsigned, JS::Value*);
 bool WindowHandlerResult(JSContext*, JS::HandleObject store, unsigned index,
                          JS::HandleObject event, JS::HandleValue function,

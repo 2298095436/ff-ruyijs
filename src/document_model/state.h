@@ -352,6 +352,7 @@ struct State {
   JSObject* Function(JSNative, const char*, unsigned, int32_t, unsigned = 0);
   bool Method(const char*, const char*, JSNative, unsigned, int32_t);
   bool Accessor(const char*, const char*, JSNative, int32_t, JSNative = nullptr);
+  bool touchHandlersEnabled = false;
   bool DefineInterface(const char*, JS::HandleObject, int32_t, bool inherit_constructor = true);
   bool TraceInterface(const char*);
 };
@@ -471,6 +472,7 @@ bool DocumentReachability(State&, std::set<NodeKey, NodeKeyLess>*, std::vector<N
 // event_handler_attributes.cpp). A value is null, an object, or the uncompiled
 // source string of a content attribute.
 bool InstallEventHandlers(State&);
+bool ConfigureTouchHandlers(State&, bool enabled);
 bool WriteEventHandler(State&, JS::HandleObject wrapper, const char* name, JS::HandleValue value);
 bool ReadEventHandler(State&, JS::HandleObject wrapper, const char* name, JS::MutableHandleValue result);
 bool HasEventHandler(JS::HandleObject wrapper, const char* name, JSContext*, bool* present);

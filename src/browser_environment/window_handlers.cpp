@@ -108,10 +108,22 @@ bool InstallWindowHandlers(State& owner, interaction::Realm& events) {
   for (unsigned i = 0; i < kWindowHandlerCount; ++i) {
     JS::RootedValue empty(cx, JS::NullValue());
     if (!JS_SetElement(cx, values, i, empty) || !JS_SetElement(cx, callbacks, i, empty)) return false;
-    if (i >= kDefaultWindowHandlerCount && !owner.LegacyTouchEventsEnabled()) continue;
+    if (i >= kDefaultWindowHandlerCount) continue;
     if (!owner.Accessor(owner.page, kWindowHandlerNames[i], i, JSPROP_ENUMERATE, Get, Set) ||
         !owner.helpers->Accessor("Window", owner.page, kWindowHandlerNames[i])) return false;
   }
+  return ConfigureWindowTouchHandlers(owner);
+}
+bool ConfigureWindowTouchHandlers(State& owner) {
+  const bool enabled = owner.LegacyTouchEventsEnabled();
+  if (enabled == owner.windowTouchHandlersEnabled) return true;
+  for (unsigned i = kDefaultWindowHandlerCount; i < kWindowHandlerCount; ++i) {
+    if (enabled) {
+      if (!owner.Accessor(owner.page, kWindowHandlerNames[i], i, JSPROP_ENUMERATE, Get, Set) ||
+          !owner.helpers->Accessor("Window", owner.page, kWindowHandlerNames[i])) return false;
+    } else if (!JS_DeleteProperty(owner.cx, owner.page, kWindowHandlerNames[i])) return false;
+  }
+  owner.windowTouchHandlersEnabled = enabled;
   return true;
 }
 }

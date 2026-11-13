@@ -37,6 +37,10 @@ bool ApplyTouchExposure(State& state, bool enabled) {
   state.touchEnabled = enabled;
   return true;
 }
+bool Realm::ConfigureLegacyTouchExposure(bool enabled) {
+  state_->legacyTouchEnabled = enabled;
+  return true;
+}
 bool Realm::ConfigureTouchExposure(bool enabled) {
   State& state = *state_;
   JSAutoRealm enter(state.cx, state.page);

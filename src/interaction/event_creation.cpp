@@ -109,9 +109,8 @@ bool Realm::CreateLegacyEvent(std::u16string_view name, JS::HandleObject view,
   if (!value.isObject()) return Unsupported(state);
   if (state.events.size() >= 100000) return Error(cx, "RangeError", "Event limit exceeded");
   const auto& type = kTypes[slot];
-  // The donor legacy TouchEvent factory is disabled independently of the
-  // public TouchEvent constructor, including when touch interfaces are enabled.
-  if (type.iface == Iface::Touch) return Unsupported(state);
+  // An explicit Firefox touch override enables this legacy factory too.
+  if (type.iface == Iface::Touch && !state.legacyTouchEnabled) return Unsupported(state);
   JS::RootedObject prototype(cx, &value.toObject());
   JS::RootedObject object(cx, JS_NewObjectWithGivenProto(cx, &kEventClass, prototype));
   JS::RootedString empty(cx, JS_NewStringCopyZ(cx, ""));

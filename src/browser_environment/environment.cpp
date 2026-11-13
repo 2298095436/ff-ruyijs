@@ -42,6 +42,16 @@ bool Environment::TouchEventsEnabled(bool* result) {
   return Prepare() && state_->TouchEventsEnabled(result);
 }
 
+bool Environment::LegacyTouchEventsEnabled(bool* result) {
+  if (!Prepare()) return false;
+  *result = state_->LegacyTouchEventsEnabled();
+  return true;
+}
+bool Environment::ConfigureTouchHandlers() {
+  JSAutoRealm enter(state_->cx, state_->page);
+  return ConfigureWindowTouchHandlers(*state_);
+}
+
 bool State::Apply(JS::HandleObject profile, bool complete) {
   std::vector<Change> changes;
   return Profile(cx, profile, complete, &changes) && ApplyChanges(changes);

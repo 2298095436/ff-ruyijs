@@ -16,6 +16,8 @@ bool ConfigureSecureExposure(BrowsingContext& context) {
   web_geometry::SetBrowserLanguage(osLocale);
   bool touchEvents = false;
   if (!context.environment->TouchEventsEnabled(&touchEvents)) return false;
+  bool legacyTouch = false;
+  if (!context.environment->LegacyTouchEventsEnabled(&legacyTouch)) return false;
   double ratio = 1;
   if (!context.environment->ReadDevicePixelRatio(&ratio)) return false;
   web_geometry::SetDevicePixelRatio(ratio);
@@ -34,6 +36,9 @@ bool ConfigureSecureExposure(BrowsingContext& context) {
          // context's resource network realm for the main page and for a frame.
          (!context.navigatorNetwork || context.navigatorNetwork->ConfigureExposure()) &&
          context.interaction->ConfigureTouchExposure(touchEvents) &&
+         context.interaction->ConfigureLegacyTouchExposure(legacyTouch) &&
+         context.document->ConfigureTouchHandlers(legacyTouch) &&
+         context.environment->ConfigureTouchHandlers() &&
          context.interaction->ConfigureExposure() &&
          context.document->ConfigureExposure() &&
          context.environment->ConfigureSecureMembers() &&
