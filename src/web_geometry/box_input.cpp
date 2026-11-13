@@ -47,7 +47,7 @@ bool BoxSameLayout(const box::BoxStyle& a, const box::BoxStyle& b) {
       "font-weight", "grid-auto-rows", "grid-column", "grid-column-end", "grid-column-start",
       "grid-row", "grid-row-end", "grid-row-start", "grid-template-columns", "grid-template-rows",
       "justify-content", "line-height", "order", "overflow", "row-gap", "transform-origin",
-      "white-space",
+      "white-space", "scrollbar-width",
   };
   if (a.font_size != b.font_size || a.root_font_size != b.root_font_size ||
       a.specified_margin_mask != b.specified_margin_mask ||
