@@ -38,13 +38,22 @@ bool PrepareTouchTargetList(JSContext* cx, Event* event, JS::HandleObject target
       !TouchListLength(cx, list, &existing)) return false;
   if (existing || !target) return true;
   JS::RootedObject expected(cx, js::CheckedUnwrapStatic(target));
-  JS::RootedObject members(cx, &JS::GetReservedSlot(event->object, kTouchWidgetMembers).toObject());
-  JSAutoRealm enter(cx, members);
+  JS::RootedObject members(cx);
   uint32_t length;
-  if (!JS::GetArrayLength(cx, members, &length)) return false;
+  const bool nativeInput = event->value.is_trusted();
+  if (nativeInput) {
+    // Ended contacts remain in changedTouches, but not targetTouches.
+    if (!TouchEventList(cx, event, kEventTouches, &members) ||
+        !TouchListLength(cx, members, &length)) return false;
+  } else {
+    members = &JS::GetReservedSlot(event->object, kTouchWidgetMembers).toObject();
+    if (!JS::GetArrayLength(cx, members, &length)) return false;
+  }
+  JSAutoRealm enter(cx, members);
   for (uint32_t i = 0; i < length; ++i) {
     JS::RootedValue member(cx);
-    if (!JS_GetElement(cx, members, i, &member)) return false;
+    if (nativeInput ? !TouchListItem(cx, members, i, &member)
+                    : !JS_GetElement(cx, members, i, &member)) return false;
     JS::RootedObject touch(cx, TouchReceiver(cx, member));
     if (!touch) return false;
     JS::RootedValue current(cx, JS::GetReservedSlot(touch, kTouchTarget));
