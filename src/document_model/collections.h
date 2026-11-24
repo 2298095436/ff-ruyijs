@@ -24,8 +24,9 @@ struct CollectionRecord;
 // structural change: a change removes their own index and name properties
 // (StaleCollection, once per change run) and the next read through their
 // members (CollectionReceiver), resolve or enumerate hooks collects and
-// materializes them again (FreshCollection). Form controls, radio groups,
-// select options, window named items, attribute maps and token views keep the
+// materializes them again (FreshCollection). Form controls and radio groups
+// use the same path; form named/index properties are invalidated together.
+// Select options, window named items, attribute maps and token views keep the
 // eager refresh: other owners read their records directly.
 bool LazyCollection(const CollectionRecord&);
 bool StaleCollection(State&, JS::HandleObject, CollectionRecord&);

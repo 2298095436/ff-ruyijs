@@ -1,4 +1,5 @@
 #include "document_model/state.h"
+#include "document_model/html_form.h"
 #include "js/Conversions.h"
 #include "js/PropertyAndElement.h"
 #include "js/PropertyDescriptor.h"
@@ -22,7 +23,6 @@ bool LazyCollection(const CollectionRecord& record) {
   if (!record.live || (record.kind != CollectionKind::NodeList && record.kind != CollectionKind::HTMLCollection))
     return false;
   switch (record.filter) {
-    case CollectionFilter::FormControls: case CollectionFilter::RadioGroup:
     case CollectionFilter::SelectOptions: case CollectionFilter::WindowNamed: return false;
     default: return true;
   }
@@ -31,6 +31,7 @@ bool StaleCollection(State& state, JS::HandleObject object, CollectionRecord& re
   if (record.stale) return true;
   JSContext* cx = state.cx;
   JSAutoRealm realm(cx, object);
+  if (record.filter == CollectionFilter::FormControls && !StaleFormNames(state, object)) return false;
   JS::ObjectOpResult removed;
   for (size_t index = 0; index < record.materialized; ++index)
     if (!JS_DeleteElement(cx, object, uint32_t(index), removed) || !removed.ok()) return false;
@@ -49,7 +50,11 @@ bool FreshCollection(State& state, CollectionRecord& record) {
   if (!record.stale || !record.cache || !record.cache->object) return true;
   record.stale = false;  // first: materializing defines properties on the object
   JS::RootedObject object(state.cx, record.cache->object);
-  if (!RefreshCollection(state, object, record)) return false;
+  const bool previous = state.syncing;
+  state.syncing = true;
+  const bool ok = RefreshCollection(state, object, record);
+  state.syncing = previous;
+  if (!ok) { record.stale = true; return false; }
   record.revision = TargetCollectionRevision(state.model, record);
   return true;
 }

@@ -8,6 +8,7 @@ Collection* FormCollection(State&, NodeKey, CollectionFilter filter = Collection
                            DomStringView name = u"");
 bool FormNamed(State&, NodeKey, DomStringView name, JS::MutableHandleValue);
 bool MaterializeForm(State&, JS::HandleObject, CollectionRecord&);
+bool StaleFormNames(State&, JS::HandleObject);
 bool InstallFormCollections(State&);
 bool InstallFormMembers(State&);
 }

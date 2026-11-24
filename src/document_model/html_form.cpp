@@ -50,6 +50,7 @@ Collection* FormCollection(State& state, NodeKey form, CollectionFilter filter, 
   }
   state.syncing = previous;
   if (list && !previous && !state.SyncCollections()) return nullptr;
+  if (list && !previous && !FreshCollection(state, *list->record)) return nullptr;
   return list;
 }
 bool FormNamed(State& state, NodeKey form, DomStringView name, JS::MutableHandleValue out) {

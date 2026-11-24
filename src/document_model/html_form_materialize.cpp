@@ -35,6 +35,19 @@ bool Put(State& state, JS::HandleObject target, JS::HandleObject cache, JS::Hand
       JS_DefinePropertyById(state.cx, cache, id, value, JSPROP_ENUMERATE);
 }
 }
+bool StaleFormNames(State& state, JS::HandleObject collection) {
+  JS::RootedValue scope(state.cx, JS::GetReservedSlot(collection, 2));
+  JS::RootedObject form(state.cx, scope.isObject() ? &scope.toObject() : nullptr);
+  JS::RootedObject formCache(state.cx, JS::GetReservedSlot(collection, 3).isObject()
+      ? &JS::GetReservedSlot(collection, 3).toObject() : nullptr);
+  JS::RootedObject namedCache(state.cx, JS::GetReservedSlot(collection, 4).isObject()
+      ? &JS::GetReservedSlot(collection, 4).toObject() : nullptr);
+  if (form && !ClearGenerated(state, form, formCache)) return false;
+  if (!ClearGenerated(state, collection, namedCache)) return false;
+  JS::SetReservedSlot(collection, 3, JS::UndefinedValue());
+  JS::SetReservedSlot(collection, 4, JS::UndefinedValue());
+  return true;
+}
 bool MaterializeForm(State& state, JS::HandleObject collection, CollectionRecord& record) {
   JS::RootedValue scope(state.cx);
   if (!state.Wrap(record.scope, &scope)) return false;
