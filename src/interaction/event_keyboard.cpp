@@ -73,7 +73,7 @@ bool GetUiWhich(JSContext* cx, unsigned argc, JS::Value* vp) {
   else if (IsA(event->kind, Iface::Mouse))
     // Firefox MouseEvent::Which is Button()+1, inherited by Pointer, Wheel
     // and DragEvent. Read the original event slot, not an overridable getter.
-    which = uint32_t(JS::GetReservedSlot(event->object, kEventButton).toInt32() + 1);
+    which = uint32_t(JS::GetReservedSlot(event->object, kEventButton).toInt32()) + 1u;
   args.rval().setNumber(which);
   return true;
 }

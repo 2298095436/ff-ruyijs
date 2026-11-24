@@ -230,6 +230,7 @@ class Realm final {
   void SetGeometryFactory(void* value) { geometryFactory_ = value; }
   bool ReadGeometryNode(JS::HandleValue, GeometryNode*, JS::MutableHandleObject parent,
                         JS::MutableHandleObjectVector children);
+  bool ReadNodeText(JS::HandleValue, DomString*, size_t limit);
   bool ReadLayoutNode(JS::HandleValue, LayoutNodeSource*, JS::MutableHandleObject parent,
                       JS::MutableHandleObjectVector children);
   bool ReadLayoutHead(JS::HandleValue, LayoutHeadSource*, JS::MutableHandleObject root);

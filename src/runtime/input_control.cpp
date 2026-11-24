@@ -82,12 +82,19 @@ bool NodeLabel(JSContext* cx, BrowsingContext& owner, JS::HandleObject node,
     JS::RootedString string(cx, JS_NewUCStringCopyN(cx, text.data(), text.size()));
     return string && JS_DefineProperty(cx, result, name, string, JSPROP_ENUMERATE);
   };
-  document_model::DomString id, role;
+  document_model::DomString id, role, text, style, className, ariaLabel, ariaValueNow;
   for (const auto& attr : source.attributes) {
     if (attr.name == u"id") id = attr.value;
     if (attr.name == u"role") role = attr.value;
+    if (attr.name == u"style") style = attr.value.substr(0, 1024);
+    if (attr.name == u"class") className = attr.value.substr(0, 512);
+    if (attr.name == u"aria-label") ariaLabel = attr.value.substr(0, 512);
+    if (attr.name == u"aria-valuenow") ariaValueNow = attr.value.substr(0, 64);
   }
-  return property("tag", source.localName) && property("id", id) && property("role", role);
+  if (!owner.document->ReadNodeText(value, &text, 512)) return false;
+  return property("tag", source.localName) && property("id", id) && property("role", role) &&
+      property("text", text) && property("style", style) && property("className", className) &&
+      property("ariaLabel", ariaLabel) && property("ariaValueNow", ariaValueNow);
 }
 bool InspectPoint(JSContext* cx, BrowsingContext& owner, JS::HandleObject target,
                   double x, double y, JS::MutableHandleValue result) {

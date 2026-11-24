@@ -56,6 +56,7 @@ return true})()''')
         assert hit['tag'] == 'button' and hit['id'] == 'real' and hit['frameDepth'] == 1, hit
         assert hit['clientX'] == 20 and hit['clientY'] == 20, hit
         assert hit['rect']['x'] == 10 and hit['rect']['y'] == 12, hit
+        assert hit['text'] == 'hold' and hit['ancestors'][0]['text'] == 'hold', hit
         assert ctx.eval('messages') == before
         assert ctx.inspect_pointer(x=-1, y=-1) is None
         assert ctx.dispatch_pointer('pointerdown', x=65, y=75,

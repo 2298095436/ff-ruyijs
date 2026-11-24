@@ -5,6 +5,16 @@
 #include <cstring>
 
 namespace ruyijs::document_model {
+bool Realm::ReadNodeText(JS::HandleValue value, DomString* out, size_t limit) {
+  NodeSource source;
+  if (!ResolveNodeSource(value, &source)) return false;
+  State& owner = *source.owner->state_;
+  JSAutoRealm realm(owner.cx, owner.page);
+  std::optional<DomString> text;
+  if (!owner.Check(owner.model.TextContent(source.key, &text))) return false;
+  *out = text.value_or(u"").substr(0, limit);
+  return true;
+}
 JSObject* Realm::svgPrototype(bool text) {
   const auto* iface = state_->Find(text ? "SVGTextContentElement" : "SVGGraphicsElement");
   return iface ? iface->prototype.get() : nullptr;
