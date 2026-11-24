@@ -18,6 +18,7 @@
 #include "js/PropertyAndElement.h"
 #include "js/StableStringChars.h"
 #include <array>
+#include <algorithm>
 #include <cmath>
 #include <string>
 
@@ -46,8 +47,21 @@ bool Mouse(JSContext* cx, JS::HandleObject target, const char* type, double x, d
       .Flag("bubbles", bubbles).Flag("cancelable", bubbles).Flag("composed", true);
   return init.Send(target, type, clock, allowed);
 }
+struct ClickReport {
+  bool pointerAllowed = true, mouseDelivered = false, mouseAllowed = true;
+  bool focusedBeforeHold = false, focusedAfterHold = false, clickAllowed = true;
+  double heldMs = 0;
+};
+bool FocusInPath(JSContext* cx, BrowsingContext& owner, const JS::RootedObjectVector& path,
+                 bool* found) {
+  JS::RootedObject focused(cx);
+  if (!owner.document->ActiveElement(&focused)) return false;
+  *found = focused && std::find(path.begin(), path.end(), focused.get()) != path.end();
+  return true;
+}
 bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, double hold,
-           SchedulingControl& clock, const std::array<double, 4>* point = nullptr) {
+           SchedulingControl& clock, const std::array<double, 4>* point = nullptr,
+           ClickReport* report = nullptr) {
   if (point) { gScreen.x = (*point)[2]; gScreen.y = (*point)[3]; }
   else if (!active.environment->InnerScreenOrigin(&gScreen.x, &gScreen.y)) return false;
   std::array<double, 4> rect{};
@@ -75,13 +89,25 @@ bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, doub
   // A cancelled pointerdown suppresses the compatibility mouse events.
   if (pointerAllowed && !Mouse(cx, target, "mousedown", x, y, 1, 1, true, clock, &mouseAllowed)) return false;
   if (pointerAllowed && mouseAllowed && !document_model::PointerFocus(cx, target)) return false;
+  const double holdStarted = clock.ClockMilliseconds();
+  if (report) {
+    report->pointerAllowed = pointerAllowed;
+    report->mouseDelivered = pointerAllowed;
+    report->mouseAllowed = mouseAllowed;
+    if (!FocusInPath(cx, active, path, &report->focusedBeforeHold)) return false;
+  }
   clock.Pass(hold);
+  if (report) {
+    report->heldMs = clock.ClockMilliseconds() - holdStarted;
+    if (!FocusInPath(cx, active, path, &report->focusedAfterHold)) return false;
+  }
   if (!Pointer(cx, target, "pointerup", x, y, 0, 0, true, clock) ||
       (pointerAllowed && !Mouse(cx, target, "mouseup", x, y, 0, 1, true, clock))) return false;
   document_model::ClickActivation activation(cx);
   if (!document_model::BeginClickActivation(cx, target, activation) ||
       !Pointer(cx, target, "click", x, y, 0, 0, true, clock, &clickAllowed) ||
       !document_model::EndClickActivation(cx, activation, clickAllowed)) return false;
+  if (report) report->clickAllowed = clickAllowed;
   return !clickAllowed || document_model::Activate(cx, target);
 }
 bool Delay(JSContext* cx, JS::HandleObject request, const char* name, double* value) {
@@ -105,14 +131,19 @@ bool UserInputRequest(JSContext* cx, TopLevel& top, JS::HandleObject request,
   std::string action, text, key, expression;
   double hold = 80, interval = 60;
   bool hasTarget = false, hasX = false, hasY = false;
-  if (!resource_wire::Fields(cx, request, {"id", "op", "action", "target", "x", "y", "text", "key", "hold_ms", "interval_ms"}) ||
+  JS::RootedValue diagnostics(cx);
+  if (!resource_wire::Fields(cx, request, {"id", "op", "action", "target", "x", "y", "text", "key", "hold_ms", "interval_ms", "diagnostics"}) ||
       !resource_wire::Property(cx, request, "action", &action, 16, resource_wire::TextKind::ASCII) ||
       !JS_HasProperty(cx, request, "target", &hasTarget) ||
       !JS_HasProperty(cx, request, "x", &hasX) || !JS_HasProperty(cx, request, "y", &hasY) ||
+      !JS_GetProperty(cx, request, "diagnostics", &diagnostics) ||
       (hasTarget && !resource_wire::Property(cx, request, "target", &expression, 65536)) ||
       !Delay(cx, request, "hold_ms", &hold) || !Delay(cx, request, "interval_ms", &interval)) return false;
   if ((hasX || hasY) && (action != "click" || hasTarget || !hasX || !hasY))
     return resource_wire::Error(cx, "Coordinate click needs both x/y and no target expression");
+  if ((!diagnostics.isUndefined() && !diagnostics.isBoolean()) ||
+      (JS::ToBoolean(diagnostics) && !(action == "click" && hasX && hasY)))
+    return resource_wire::Error(cx, "Click diagnostics require coordinates and a boolean flag");
   BrowsingContext& active = top.Active();
   JSAutoRealm realm(cx, active.page);
   JS::RootedObject target(cx);
@@ -142,7 +173,23 @@ bool UserInputRequest(JSContext* cx, TopLevel& top, JS::HandleObject request,
       if (!target) { result.setBoolean(false); return true; }
       JSAutoRealm targetRealm(cx, owner->page);
       const std::array<double, 4> point{x, y, screenX - x, screenY - y};
-      if (!Click(cx, *owner, target, hold, scheduling, &point)) return false;
+      ClickReport report;
+      const bool diagnostic = JS::ToBoolean(diagnostics);
+      if (!Click(cx, *owner, target, hold, scheduling, &point, diagnostic ? &report : nullptr)) return false;
+      if (diagnostic) {
+        JS::RootedObject object(cx, JS_NewPlainObject(cx));
+        if (!object ||
+            !JS_DefineProperty(cx, object, "delivered", true, JSPROP_ENUMERATE) ||
+            !JS_DefineProperty(cx, object, "pointerDownAllowed", report.pointerAllowed, JSPROP_ENUMERATE) ||
+            !JS_DefineProperty(cx, object, "mouseDownDelivered", report.mouseDelivered, JSPROP_ENUMERATE) ||
+            !JS_DefineProperty(cx, object, "mouseDownAllowed", report.mouseAllowed, JSPROP_ENUMERATE) ||
+            !JS_DefineProperty(cx, object, "focusedBeforeHold", report.focusedBeforeHold, JSPROP_ENUMERATE) ||
+            !JS_DefineProperty(cx, object, "focusedAfterHold", report.focusedAfterHold, JSPROP_ENUMERATE) ||
+            !JS_DefineProperty(cx, object, "heldMs", report.heldMs, JSPROP_ENUMERATE) ||
+            !JS_DefineProperty(cx, object, "clickAllowed", report.clickAllowed, JSPROP_ENUMERATE)) return false;
+        result.setObject(*object);
+        return true;
+      }
       result.setBoolean(true);
       return true;
     }

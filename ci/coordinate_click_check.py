@@ -52,7 +52,10 @@ for(const key of ['contentWindow','contentDocument','getBoundingClientRect'])
 Object.defineProperty(fixtureFrame,key,{get(){throw Error('page getter must not choose native input')}});
 document.elementFromPoint=()=>{throw Error('page hit test must not run')};messages=[];void 0''')
         origin = ctx.eval('({x:mozInnerScreenX,y:mozInnerScreenY})')
-        assert ctx.click_at(x=65, y=75, hold_ms=300)
+        report = ctx.click_at(x=65, y=75, hold_ms=300, diagnostics=True)
+        assert report['delivered'] and report['pointerDownAllowed'] and report['mouseDownDelivered'], report
+        assert report['mouseDownAllowed'] and report['focusedBeforeHold'] and report['focusedAfterHold'], report
+        assert report['heldMs'] == 300 and report['clickAllowed'], report
         settle(ctx)
         rows = ctx.eval('messages')
         assert [r['type'] for r in rows] == ['pointerdown', 'mousedown', 'focus', 'pointerup', 'mouseup', 'click'], rows
@@ -66,7 +69,12 @@ document.elementFromPoint=()=>{throw Error('page hit test must not run')};messag
             ctx.eval('fixtureWindow.document.body.setAttribute("data-mode",' + json.dumps(mode) +
                      ');fixtureWindow.document.getElementById("real").blur();void 0')
             ctx.eval('messages=[];void 0')
-            assert ctx.click_at(x=65, y=75, hold_ms=300)
+            report = ctx.click_at(x=65, y=75, hold_ms=300, diagnostics=True)
+            assert report['pointerDownAllowed'] == (mode != 'pointer'), report
+            assert report['mouseDownDelivered'] == (mode != 'pointer'), report
+            assert not report['focusedBeforeHold'] and not report['focusedAfterHold'], report
+            if mode == 'mouse':
+                assert not report['mouseDownAllowed'], report
             settle(ctx)
             rows = ctx.eval('messages')
             assert [r['type'] for r in rows] == expected, rows
