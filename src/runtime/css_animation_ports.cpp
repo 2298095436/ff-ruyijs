@@ -7,6 +7,8 @@
 #include "domain/styling/css_components.h"
 #include "domain/styling/css_keyframes.h"
 #include "js/Realm.h"
+#include "jsapi.h"
+#include <cmath>
 #include <algorithm>
 #include <cstdlib>
 #include <limits>
