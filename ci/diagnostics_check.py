@@ -80,6 +80,19 @@ def check_error_records():
         check("a non-Error record carries no stack", rows[6]["stack"] == [], repr(rows[6]["stack"]))
 
 
+def check_full_api_monitor():
+    with Context(mode="debug") as context:
+        context.eval('window.__diagNavigator=navigator;void 0')
+        context.clear_api_log()
+        context.eval('for(let i=0;i<21000;i++)void __diagNavigator.userAgent;void 0')
+        rows = context.peek_api_log()
+        check('a full monitor transfers without a snapshot traversal failure', len(rows) == 20000, len(rows))
+        check('peek keeps the full monitor', context.peek_api_log() == rows)
+        drained = context.get_api_log('Navigator.userAgent')
+        check('get filters all pages before draining', len(drained) == 20000, len(drained))
+        check('get clears only after all records transferred', context.peek_api_log() == [])
+
+
 START = r"""
 (function () {
   const seen = (globalThis.__start = globalThis.__start || []);
@@ -179,6 +192,7 @@ def check_document_start():
 def main():
     check_error_records()
     check_document_start()
+    check_full_api_monitor()
     print(("FAILED: " + ", ".join(FAILURES)) if FAILURES else "diagnostics checks passed")
     return 1 if FAILURES else 0
 

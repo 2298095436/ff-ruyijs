@@ -4,6 +4,7 @@
 #include "jsapi.h"
 #include "js/Array.h"
 #include "js/PropertyAndElement.h"
+#include <cmath>
 
 namespace ruyijs {
 namespace observability = ruyijs::domain::observability;
@@ -68,11 +69,14 @@ void ApiMonitor::Record(const char* iface, const char* member, int type) {
   monitor.record_access(observability::ApiPath(path), kind, detail);
 }
 
-bool ApiMonitor::Describe(const std::string& filter, bool drain,
+bool ApiMonitor::Describe(const std::string& filter, bool drain, size_t offset, size_t limit,
                           JS::MutableHandleValue result) {
   JS::RootedValueVector entries(cx_);
+  size_t matching = 0;
   for (const auto& record : state_->monitor.records()) {
     if (!filter.empty() && record.path().value() != filter) continue;
+    if (matching++ < offset) continue;
+    if (entries.length() >= limit) break;
     JS::RootedObject entry(cx_, JS_NewPlainObject(cx_));
     JS::RootedString path(cx_, JS_NewStringCopyZ(cx_, record.path().value().c_str()));
     JS::RootedString kind(cx_, JS_NewStringCopyZ(cx_, TypeName(record.type())));
@@ -100,6 +104,21 @@ bool ApiMonitor::Request(JS::HandleObject request, JS::MutableHandleValue result
     return false;
   }
   if (!StringProperty(cx_, request, "filter", &filter, "")) return false;
+  double offset = 0, limit = kMaxRecords;
+  for (const char* name : {"offset", "limit"}) {
+    bool present = false;
+    JS::RootedValue value(cx_);
+    if (!JS_HasOwnProperty(cx_, request, name, &present)) return false;
+    if (!present) continue;
+    if (!JS_GetProperty(cx_, request, name, &value)) return false;
+    if (!value.isNumber() || !std::isfinite(value.toNumber()) ||
+        std::trunc(value.toNumber()) != value.toNumber() || value.toNumber() < 0 ||
+        value.toNumber() > kMaxRecords || (std::string(name) == "limit" && value.toNumber() == 0)) {
+      JS_ReportErrorASCII(cx_, "API log offset/limit must be bounded nonnegative integers (limit > 0)");
+      return false;
+    }
+    (std::string(name) == "offset" ? offset : limit) = value.toNumber();
+  }
   if (action == "clear") {
     state_->monitor.clear_records();
     JS::RootedObject object(cx_, JS_NewPlainObject(cx_));
@@ -108,6 +127,6 @@ bool ApiMonitor::Request(JS::HandleObject request, JS::MutableHandleValue result
     result.setObject(*object);
     return true;
   }
-  return Describe(filter, action == "get", result);
+  return Describe(filter, action == "get", size_t(offset), size_t(limit), result);
 }
 }
