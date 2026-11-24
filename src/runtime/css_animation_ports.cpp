@@ -110,7 +110,7 @@ std::vector<web_animation::CssAnimationInput> Parse(const web_styling::ComputedS
 void BindCssAnimationPorts(BrowsingContext& owner) {
   web_animation::Realm::CssPorts ports;
   ports.context = &owner;
-  ports.revision = [](void* raw) {
+  ports.revision = [](void* raw) -> uint64_t {
     auto& c = *static_cast<BrowsingContext*>(raw);
     return (c.document->AnimationRevision() * 1099511628211ull) ^ (c.styling->AnimationRevision() + 1);
   };
