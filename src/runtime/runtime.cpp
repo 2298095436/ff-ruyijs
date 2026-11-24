@@ -451,6 +451,11 @@ bool RunSession(JSContext* cx, const SessionOptions& session, js::cli::OptionPar
     scheduling->SetApiMonitor(&ApiMonitor::Port, &monitor);
     resources->SetApiMonitor(&ApiMonitor::Port, &monitor);
   }
+  struct FrameMonitorBinding {
+    Frames& frames;
+    ~FrameMonitorBinding() { frames.SetApiMonitor(nullptr); }
+  } frameMonitorBinding{*frames};
+  if (monitor.enabled()) frames->SetApiMonitor(&monitor);
   // Later top-level documents (docs/owners/TOP_LEVEL.md). Declared after every
   // owner their ports reach, so Close retires the active one and clears the
   // ports before any of those owners is destroyed.

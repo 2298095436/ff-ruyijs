@@ -9,8 +9,8 @@ thread_local State* activeState = nullptr;
 // Target ids are unique across every realm on this thread, so a same-origin
 // event dispatched into another realm resolves its target unambiguously.
 static thread_local uint64_t nextTarget = 0;
-// Count of realms on this thread whose debug port is bound. Only the main
-// page binds one, so this stays 0 for every non-debug Context.
+// Count of realms on this thread whose debug port is bound. The top-level
+// document and child frames share a monitor; non-debug Contexts keep this 0.
 static thread_local unsigned boundMonitors = 0;
 bool MonitorBound() { return boundMonitors != 0; }
 const JSClass kEventClass = {"Event", JSCLASS_HAS_RESERVED_SLOTS(kEventSlotCount)};

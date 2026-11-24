@@ -46,6 +46,7 @@ namespace execution_scheduling {class Realm;}
 class ModuleSession;
 class Frames;
 class TopLevel;
+class ApiMonitor;
 // One browsing context's realm-local owners. The main page and every iframe
 // run the same ordered installers: PageHelpers -> Interaction (base Event/
 // EventTarget in Begin, the pref-dependent derived interfaces at the start of
@@ -183,6 +184,8 @@ class Frames final {
   // and tasks stop, as in Firefox once the iframe's document is gone).
   using RetirePort = void (*)(void* context, BrowsingContext& target);
   void SetRetirePort(RetirePort port, void* context);
+  // The Context monitor outlives this binding; clear before its destruction.
+  void SetApiMonitor(ApiMonitor* monitor);
   // Retires every frame inside `top`'s document when that top-level document
   // is itself retired by a navigation.
   void RetireUnder(BrowsingContext& top);
@@ -244,6 +247,7 @@ class Frames final {
   bool CompleteBlank(BrowsingContext& child);
   JSContext* cx_;
   TopLevel* topLevel_ = nullptr;  // Original borrowed current-document source.
+  ApiMonitor* apiMonitor_ = nullptr;
   LoadPort load_ = nullptr;
   void* loadContext_ = nullptr;
   LoadHtmlPort loadHtml_ = nullptr;

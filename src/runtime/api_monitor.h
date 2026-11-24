@@ -6,6 +6,7 @@
 #include "js/TypeDecls.h"
 
 namespace ruyijs {
+struct BrowsingContext;
 // Holds the imported ApiMonitorAggregate. Only api_monitor.cpp sees that
 // domain header, so the throwing engine-independent boundary stays inside one
 // translation unit and no exception crosses the JS engine stack.
@@ -37,5 +38,7 @@ class ApiMonitor final {
   JSContext* cx_;
   std::unique_ptr<ApiMonitorState> state_;
 };
+// Bind the original realm-local owners to the Context's one debug monitor.
+void BindApiMonitor(BrowsingContext& target, ApiMonitor* monitor);
 }
 #endif

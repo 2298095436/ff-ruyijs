@@ -1,6 +1,7 @@
 #include "runtime/secure_exposure.h"
 #include "runtime/user_activation_ports.h"
 #include "runtime/browsing_context.h"
+#include "runtime/api_monitor.h"
 #include "runtime/css_animation_ports.h"
 #include "execution_scheduling/realm.h"
 #include "web_styling/computed_source.h"
@@ -727,6 +728,11 @@ Frames::~Frames() {
   while (!children_.empty()) children_.pop_back();
   while (!retired_.empty()) retired_.pop_back();
 }
+void Frames::SetApiMonitor(ApiMonitor* monitor) {
+  apiMonitor_ = monitor;
+  for (const auto& child : children_) BindApiMonitor(*child, monitor);
+  for (const auto& child : retired_) BindApiMonitor(*child, monitor);
+}
 BrowsingContext* Frames::FindDocument(const document_model::Realm& document) const {
   for (const auto& context : children_)
     if (context->document.get() == &document) return context.get();
@@ -779,6 +785,7 @@ bool Frames::Create(void* context, JS::HandleObject element, document_model::Nod
   // run, because the first load follows within the same structural change.
   if (self.scheduling_ && !self.scheduling_(self.schedulingContext_, *child)) return false;
   if (self.resource_ && !self.resource_(self.resourceContext_, *child)) return false;
+  if (self.apiMonitor_) BindApiMonitor(*child, self.apiMonitor_);
   child->document->CopyScriptPortFrom(*parent.document);
   child->document->CopyFormPortsFrom(*parent.document);
   // Child Location writes share the existing asynchronous frame-load path.

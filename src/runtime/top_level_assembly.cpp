@@ -5,14 +5,12 @@
 #include "execution_scheduling/realm.h"
 
 namespace ruyijs {
-namespace {
-void BindMonitor(BrowsingContext& target, ApiMonitor* monitor) {
+void BindApiMonitor(BrowsingContext& target, ApiMonitor* monitor) {
   void (*port)(void*, const char*, const char*, int) = monitor ? &ApiMonitor::Port : nullptr;
   target.document->SetApiMonitor(port, monitor);
   target.interaction->SetApiMonitor(port, monitor);
   target.environment->SetApiMonitor(port, monitor);
   if (target.resources) target.resources->SetApiMonitor(port, monitor);
-}
 }
 void BindDocumentEvents(BrowsingContext& target, PageLoad& pages) {
   target.environment->SetPopStatePort([](void* context, JS::HandleObject window,
@@ -45,7 +43,7 @@ bool BindTopLevelDocument(void* assembly, BrowsingContext& target) {
   target.audio->SetTaskPort([](void* context, JS::HandleObject callback) {
     return static_cast<execution_scheduling::Realm*>(context)->PostTask(callback);
   }, &owners.scheduling);
-  if (owners.monitor.enabled()) BindMonitor(target, &owners.monitor);
+  if (owners.monitor.enabled()) BindApiMonitor(target, &owners.monitor);
   return true;
 }
 void RetireTopLevelDocument(void* assembly, BrowsingContext& target) {
@@ -70,7 +68,7 @@ void RetireTopLevelDocument(void* assembly, BrowsingContext& target) {
   target.environment->SetEventPort(nullptr, nullptr);
   target.audio->SetClockPort(nullptr, nullptr);
   target.audio->SetTaskPort(nullptr, nullptr);
-  BindMonitor(target, nullptr);
+  BindApiMonitor(target, nullptr);
   // A retired document's timelines go inactive and queue no further animation work.
   if (target.animation) target.animation->SetSchedulingPorts({});
 }
