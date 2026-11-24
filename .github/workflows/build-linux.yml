@@ -25,6 +25,8 @@ jobs:
     env:
       CC: clang-21
       CXX: clang++-21
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CCACHE_DIR: /home/runner/.cache/ccache
     steps:
       - name: Runner facts
         run: |
@@ -72,6 +74,21 @@ jobs:
           ci/linux/build.sh deps
           # NSS's build.sh runs plain `clang`; this also puts LLVM 21's tools first.
           echo "/usr/lib/llvm-21/bin" >> "$GITHUB_PATH"
+
+      - name: Prepare native compiler cache
+        run: |
+          sudo apt-get install -y -qq --no-install-recommends ccache
+          ccache --max-size=2G
+          echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+
+      - name: Restore native compiler cache
+        id: native-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: /home/runner/.cache/ccache
+          key: native-linux-${{ steps.firefox.outputs.sha }}-${{ github.sha }}
+          restore-keys: |
+            native-linux-${{ steps.firefox.outputs.sha }}-
 
       # Besides the Firefox commit, the objdir depends only on the donor step of
       # build.sh (its configure options), so changes to the other steps keep it.
@@ -135,6 +152,13 @@ jobs:
         run: |
           df -h "$GITHUB_WORKSPACE"
           du -sh firefox obj/* build/* vendor/necko-derived 2>/dev/null || true
+
+      - name: Save native compiler cache
+        if: always() && steps.native-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /home/runner/.cache/ccache
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
 
       - name: Upload the wheel
         if: always()
