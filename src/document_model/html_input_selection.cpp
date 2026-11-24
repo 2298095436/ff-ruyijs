@@ -1,6 +1,7 @@
 // Programmatic selection changes queue the native select event on the original
 // element. The callback owns its target through a traced function slot.
 #include "document_model/html_input.h"
+#include "browser_environment/environment.h"
 #include "interaction/realm.h"
 #include "jsfriendapi.h"
 #include "js/Object.h"
