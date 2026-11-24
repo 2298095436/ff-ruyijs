@@ -120,6 +120,16 @@ jobs:
       - name: Build dist/js and libruyijs_client.so
         run: ci/linux/build.sh shell
 
+      - name: Upload compiled native runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruyijs-linux-native
+          path: |
+            dist/js
+            dist/libruyijs_client.so
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Restore NSS and Neqo builds
         id: necko
         uses: actions/cache/restore@v4
