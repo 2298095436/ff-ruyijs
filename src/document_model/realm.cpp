@@ -310,6 +310,16 @@ bool Realm::ActiveElement(JS::MutableHandleObject element) {
   element.set(&value.toObject());
   return true;
 }
+bool Realm::FocusedElement(JS::MutableHandleObject element) {
+  NodeKey key;
+  JS::RootedValue value(state_->cx);
+  element.set(nullptr);
+  if (!state_->Check(state_->model.FocusedElement(state_->main, &key))) return false;
+  if (!key.node) return true;
+  if (!state_->Wrap(key, &value)) return false;
+  element.set(&value.toObject());
+  return true;
+}
 void Realm::RetireImageLoads() {
   OrphanImageRequests(*state_, true);
   state_->imageLoad = nullptr;

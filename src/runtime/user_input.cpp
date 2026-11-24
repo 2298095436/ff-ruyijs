@@ -56,7 +56,7 @@ struct ClickReport {
 bool FocusInPath(JSContext* cx, BrowsingContext& owner, const JS::RootedObjectVector& path,
                  bool* found) {
   JS::RootedObject focused(cx);
-  if (!owner.document->ActiveElement(&focused)) return false;
+  if (!owner.document->FocusedElement(&focused)) return false;
   *found = focused && std::find(path.begin(), path.end(), focused.get()) != path.end();
   return true;
 }
@@ -179,15 +179,19 @@ bool UserInputRequest(JSContext* cx, TopLevel& top, JS::HandleObject request,
       if (!Click(cx, *owner, target, hold, scheduling, &point, diagnostic ? &report : nullptr)) return false;
       if (diagnostic) {
         JS::RootedObject object(cx, JS_NewPlainObject(cx));
+        const auto boolean = [&](const char* name, bool bit) {
+          JS::RootedValue value(cx, JS::BooleanValue(bit));
+          return JS_DefineProperty(cx, object, name, value, JSPROP_ENUMERATE);
+        };
         if (!object ||
-            !JS_DefineProperty(cx, object, "delivered", true, JSPROP_ENUMERATE) ||
-            !JS_DefineProperty(cx, object, "pointerDownAllowed", report.pointerAllowed, JSPROP_ENUMERATE) ||
-            !JS_DefineProperty(cx, object, "mouseDownDelivered", report.mouseDelivered, JSPROP_ENUMERATE) ||
-            !JS_DefineProperty(cx, object, "mouseDownAllowed", report.mouseAllowed, JSPROP_ENUMERATE) ||
-            !JS_DefineProperty(cx, object, "focusedBeforeHold", report.focusedBeforeHold, JSPROP_ENUMERATE) ||
-            !JS_DefineProperty(cx, object, "focusedAfterHold", report.focusedAfterHold, JSPROP_ENUMERATE) ||
+            !boolean("delivered", true) ||
+            !boolean("pointerDownAllowed", report.pointerAllowed) ||
+            !boolean("mouseDownDelivered", report.mouseDelivered) ||
+            !boolean("mouseDownAllowed", report.mouseAllowed) ||
+            !boolean("focusedBeforeHold", report.focusedBeforeHold) ||
+            !boolean("focusedAfterHold", report.focusedAfterHold) ||
             !JS_DefineProperty(cx, object, "heldMs", report.heldMs, JSPROP_ENUMERATE) ||
-            !JS_DefineProperty(cx, object, "clickAllowed", report.clickAllowed, JSPROP_ENUMERATE)) return false;
+            !boolean("clickAllowed", report.clickAllowed)) return false;
         result.setObject(*object);
         return true;
       }

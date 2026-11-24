@@ -53,6 +53,7 @@ Object.defineProperty(fixtureFrame,key,{get(){throw Error('page getter must not 
 document.elementFromPoint=()=>{throw Error('page hit test must not run')};messages=[];void 0''')
         origin = ctx.eval('({x:mozInnerScreenX,y:mozInnerScreenY})')
         report = ctx.click_at(x=65, y=75, hold_ms=300, diagnostics=True)
+        assert all(type(value) is bool for key, value in report.items() if key != 'heldMs'), report
         assert report['delivered'] and report['pointerDownAllowed'] and report['mouseDownDelivered'], report
         assert report['mouseDownAllowed'] and report['focusedBeforeHold'] and report['focusedAfterHold'], report
         assert report['heldMs'] == 300 and report['clickAllowed'], report

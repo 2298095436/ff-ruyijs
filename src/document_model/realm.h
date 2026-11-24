@@ -176,6 +176,8 @@ class Realm final {
   bool RunAutofocus();
   // The main document's active element (the focused element, else body).
   bool ActiveElement(JS::MutableHandleObject element);
+  // The stored focus target, excluding Document.activeElement's body fallback.
+  bool FocusedElement(JS::MutableHandleObject element);
   // document.referrer of this realm's window document (the loading request's Referer).
   void SetDocumentReferrer(const std::string& referrer);
   // Page-load port for the shared runtime coordinator (runtime/page_load.cpp).
