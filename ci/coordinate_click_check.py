@@ -81,6 +81,12 @@ document.elementFromPoint=()=>{throw Error('page hit test must not run')};messag
         assert ctx.click_at(x=150, y=75, hold_ms=0)
         assert ctx.eval("fixtureWindow.document.getElementById('check').checked") is True
         assert ctx.click_at(x=-1, y=-1) is False
+        try:
+            ctx.click_at(x=65, y=75, hold_ms=60001)
+        except Exception as error:
+            assert '60000' in str(error), error
+        else:
+            raise AssertionError('Unbounded mouse hold was accepted')
         print('ok full native coordinate click, focus, hold, cancellation and activation in ' +
               ('cross-origin' if cross_origin else 'srcdoc') + ' closed-shadow frame', flush=True)
 

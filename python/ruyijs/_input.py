@@ -71,7 +71,7 @@ class InputControl:
 
         Enters closed shadow trees and live iframe viewports, then uses the
         normal trusted click sequence, focus, cancellation and activation.
-        The event loop runs during hold_ms, as in click(). Returns False if
+        The event loop runs during hold_ms (at most 60000), as in click(). Returns False if
         the point has no rendered target. Page DOM getters cannot choose it.
         """
         for value in (x, y):

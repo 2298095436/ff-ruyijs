@@ -89,8 +89,12 @@ bool Delay(JSContext* cx, JS::HandleObject request, const char* name, double* va
   JS::RootedValue v(cx);
   if (!JS_HasProperty(cx, request, name, &present)) return false;
   if (!present) return true;
-  if (!JS_GetProperty(cx, request, name, &v) || !v.isNumber() || !(v.toNumber() >= 0) || v.toNumber() > 10000)
-    return resource_wire::Error(cx, "Input delay must be a number from 0 to 10000 ms", true);
+  const double maximum = std::string(name) == "hold_ms" ? 60000 : 10000;
+  if (!JS_GetProperty(cx, request, name, &v)) return false;
+  if (!v.isNumber() || !(v.toNumber() >= 0) || v.toNumber() > maximum)
+    return resource_wire::Error(cx, maximum == 60000
+        ? "Input hold must be a number from 0 to 60000 ms"
+        : "Input delay must be a number from 0 to 10000 ms", true);
   *value = v.toNumber();
   return true;
 }
