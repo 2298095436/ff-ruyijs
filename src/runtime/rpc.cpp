@@ -156,7 +156,7 @@ bool Serve(JSContext* cx, TopLevel& top,
       success = pages.Request(request, &value);
       if (!success && !Failure(cx, &value)) return false;
     } else if (success && operation == "input") {
-      success = InputRequest(cx, page, request, scheduling, &value);
+      success = InputRequest(cx, top, request, scheduling, &value);
       if (!success && !Failure(cx, &value)) return false;
     } else if (success && operation == "user") {
       success = UserInputRequest(cx, top, request, scheduling, &value);

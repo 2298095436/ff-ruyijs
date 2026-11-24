@@ -1,4 +1,5 @@
 """Trusted input is created by the existing native Interaction owner."""
+import math
 
 
 class InputControl:
@@ -15,6 +16,27 @@ class InputControl:
         self._callbacks.guard()
         with self._lock:
             return self._request("input", type=event_type, target=target, init=init)
+
+    def dispatch_pointer(self, event_type, *, x, y, **init):
+        """Dispatch one trusted Mouse/Pointer event at viewport coordinates.
+
+        The native layout hit test enters closed shadow trees and live iframe
+        viewports. x/y are CSS pixels in the top-level viewport; clientX/Y are
+        translated to the receiving frame and screenX/Y keep the screen point.
+        Page-provided DOM getters are not used to find the event target.
+        Returns False when the point has no rendered target. Like dispatch_input,
+        this sends one event, without compatibility events or click activation.
+        """
+        if not isinstance(event_type, str):
+            raise TypeError("input type must be a string")
+        for value in (x, y):
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise TypeError("pointer coordinates must be numbers")
+            if not math.isfinite(value):
+                raise ValueError("pointer coordinates must be finite")
+        self._callbacks.guard()
+        with self._lock:
+            return self._request("input", type=event_type, x=x, y=y, init=init)
 
     def click(self, target, *, hold_ms=80):
         """Click the element `target` (a JavaScript expression) as a user does.

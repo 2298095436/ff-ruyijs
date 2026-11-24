@@ -725,6 +725,11 @@ BrowsingContext* Frames::FindDocument(const document_model::Realm& document) con
     if (context->document.get() == &document) return context.get();
   return nullptr;
 }
+BrowsingContext* Frames::FindChild(const BrowsingContext& parent, document_model::NodeKey element) const {
+  for (const auto& child : children_)
+    if (child->parent == &parent && SameNode(child->frame_element, element)) return child.get();
+  return nullptr;
+}
 bool Frames::DescendsFrom(const BrowsingContext* child, const BrowsingContext* ancestor) {
   for (const BrowsingContext* cursor = child; cursor; cursor = cursor->parent)
     if (cursor == ancestor) return true;

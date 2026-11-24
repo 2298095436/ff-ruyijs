@@ -187,6 +187,9 @@ class Frames final {
   // is itself retired by a navigation.
   void RetireUnder(BrowsingContext& top);
   BrowsingContext* FindDocument(const document_model::Realm& document) const;
+  // Native hit testing follows the live frame tree without invoking script
+  // accessors on an embedding element (including a closed shadow tree).
+  BrowsingContext* FindChild(const BrowsingContext& parent, document_model::NodeKey element) const;
   // True while `context` is the live context of its frame element: not yet
   // retired by the element leaving the tree.
   bool Live(const BrowsingContext& context) const;

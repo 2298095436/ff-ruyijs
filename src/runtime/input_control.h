@@ -3,7 +3,8 @@
 #include "runtime/runtime.h"
 namespace ruyijs {
 class SchedulingControl;
-bool InputRequest(JSContext*, JS::HandleObject page, JS::HandleObject request,
+class TopLevel;
+bool InputRequest(JSContext*, TopLevel&, JS::HandleObject request,
                   SchedulingControl&, JS::MutableHandleValue result);
 }
 #endif
