@@ -129,6 +129,7 @@ case "$step" in
     "${clean[@]}" "$venv/bin/python" "$root/ci/document_stream_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/css_animation_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/pointer_hit_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/inline_alignment_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/wall_budget_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/connect_fallback_check.py"
     # One real page load through the bundled Necko helper, direct and through

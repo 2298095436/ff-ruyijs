@@ -8,6 +8,25 @@ void BoxFlow::ShiftBoxes(size_t index, double dx, double dy) {
   box.content[0] += dx; box.content[1] += dy;
   for (const auto child : nodes[index].children) ShiftBoxes(child, dx, dy);
 }
+void BoxFlow::ShiftInlineBoxes(size_t index, double dx, bool containing) {
+  const auto& node = nodes[index];
+  const auto& position = node.style.Slot(BoxKnown::Position);
+  if (position == "fixed") return;
+  const auto specified = [&](int slot) {
+    const auto& value = node.style.Slot(slot);
+    return !value.empty() && value != "auto";
+  };
+  // An absolute box with an explicit horizontal inset stays anchored to its
+  // containing block outside the line. An auto inset follows static position.
+  if (BoxAbsolute(node) && !containing &&
+      (specified(BoxKnown::Left) || specified(BoxKnown::Right))) return;
+  auto& box = boxes[index];
+  box.border[0] += dx; box.content[0] += dx;
+  const auto& transform = node.style.Slot(BoxKnown::Transform);
+  containing = containing || (!position.empty() && position != "static") ||
+               (!transform.empty() && transform != "none");
+  for (const auto child : node.children) ShiftInlineBoxes(child, dx, containing);
+}
 bool BoxFlow::AdjoinsChildren(size_t index, bool top) const {
   const auto& node = nodes[index];
   const auto& box = boxes[index];
@@ -50,6 +69,21 @@ bool BoxFlow::Children(size_t index, size_t positioned, unsigned depth, double* 
   }
   const auto& parent = boxes[index];
   double cursor_y = 0, line_x = 0, line_height = 0, extent_x = 0;
+  std::vector<size_t> line_children;
+  const auto& align = nodes[index].style.Get("text-align");
+  const bool rtl = nodes[index].style.Get("direction") == "rtl";
+  const bool right = align == "right" || (align == "end" && !rtl) ||
+                     ((align.empty() || align == "start" || align == "justify") && rtl);
+  const auto finish_line = [&]() {
+    // CSS 2.2 16.2 aligns inline-level boxes as a group in the line's content
+    // box. Negative free space also aligns over-wide unbreakable content.
+    const double free = parent.content[2] - line_x;
+    const double dx = BoxRound(align == "center" ? free / 2 : right ? free : 0);
+    if (dx != 0)
+      for (const auto child : line_children) ShiftInlineBoxes(child, dx);
+    line_children.clear();
+    cursor_y += line_height; line_x = line_height = 0;
+  };
   // The adjoining margins not yet resolved: the largest positive and the most
   // negative (CSS 2 §8.3.1). While |leading| holds, they adjoin the parent's
   // top margin and collapse through it instead of moving the first box.
@@ -78,7 +112,7 @@ bool BoxFlow::Children(size_t index, size_t positioned, unsigned depth, double* 
       continue;
     }
     const bool in_line = node.text || display == "inline" || display == "inline-block";
-    if (!in_line) { cursor_y += line_height; line_x = line_height = 0; }
+    if (!in_line) finish_line();
     // A line box with content separates the margins before it from those after.
     if (in_line && line_x == 0 && line_height == 0 && (!node.text || node.text_width > 0)) {
       resolve();
@@ -100,6 +134,7 @@ bool BoxFlow::Children(size_t index, size_t positioned, unsigned depth, double* 
     if (!box.present) continue;
     const double outer_width = box.border[2]+box.margin[1]+box.margin[3];
     if (in_line) {
+      line_children.push_back(child);
       const double outer_height = box.border[3]+box.margin[0]+box.margin[2];
       line_x += outer_width;
       // An inline replaced element is baseline-aligned. Firefox's line box
@@ -129,7 +164,7 @@ bool BoxFlow::Children(size_t index, size_t positioned, unsigned depth, double* 
     cursor_y += box.border[3];
     add(box.margin[2]);
   }
-  cursor_y += line_height;
+  finish_line();
   if (open) {
     // No in-flow content: every margin met collapses through the top edge.
     leading[index] = positive + negative;

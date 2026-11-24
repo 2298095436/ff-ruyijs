@@ -57,6 +57,7 @@ struct BoxFlow {
   double IntrinsicOuter(size_t, bool minimum, unsigned depth);
   double IntrinsicContent(size_t, bool minimum, unsigned depth);  // Ignoring its own width.
   void ShiftBoxes(size_t, double dx, double dy);
+  void ShiftInlineBoxes(size_t, double dx, bool containing = false);
   // Per node for one ComputeBoxLayout call: a flex item's resolved content-box
   // width/height (NaN: from its style), and memoized intrinsic widths.
   std::vector<double> forced_width{}, forced_height{}, max_content{}, min_content{};

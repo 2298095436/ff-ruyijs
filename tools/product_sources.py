@@ -197,6 +197,8 @@ def inputs(root):
 
 
 def needs_exceptions(source):
+    if source.parent.name == "resource_network" and source.stem == "http_error_capture":
+        return True  # Guarded filesystem diagnostics boundary; no JSAPI.
     if source.parent.name == "web_media":
         return source.stem in ("image_codec", "image_gif", "image_data", "image_avif", "image_color", "image_apng", "image_webp", "image_composition", "image_progress")
     if source.parent.name == "web_workers":
