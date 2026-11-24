@@ -23,6 +23,7 @@ def main():
     parser.add_argument('--destination', required=True)
     parser.add_argument('--date', required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--proxy', help='Explicit transport proxy for a local control; omitted on the cloud runner')
     args = parser.parse_args()
     datetime.strptime(args.date, '%Y-%m-%d')
     if not all(len(code) == 3 and code.isascii() and code.isalpha()
@@ -38,7 +39,7 @@ def main():
         'browserAssist': False, 'importedSession': False, 'requestBodiesIncluded': False,
         'basketMutations': False, 'status': 'starting', 'responses': []}
     try:
-        with Context(timeout=45, tls=160, http_timeout=25, http_read_timeout=15) as ctx:
+        with Context(timeout=45, tls=160, proxy=args.proxy, http_timeout=25, http_read_timeout=15) as ctx:
             ctx.configure_environment(profile)
             ctx.configure_clock('system')
             shell = Path(ctx.shell)
