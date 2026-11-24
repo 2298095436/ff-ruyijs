@@ -21,10 +21,16 @@ std::string Json(const std::string& text) {
   return out + '"';
 }
 }
-void CaptureHttpError(const std::string& method, const std::string& url,
+void CaptureHttpResponse(const std::string& method, const std::string& url,
                       const HttpResult& response) noexcept {
-  if (response.status < 400 || response.status >= 600) return;
-  const char* configured = std::getenv("RUYIJS_HTTP_ERROR_DIR");
+  if (response.status < 100 || response.status >= 600) return;
+  const char* configured = nullptr;
+  const char* capture = std::getenv("RUYIJS_HTTP_CAPTURE_DIR");
+  const char* filter = std::getenv("RUYIJS_HTTP_CAPTURE_URL");
+  if (capture && *capture && filter && *filter && url.find(filter) != std::string::npos)
+    configured = capture;
+  else if (response.status >= 400)
+    configured = std::getenv("RUYIJS_HTTP_ERROR_DIR");
   if (!configured || !*configured) return;
   try {
     const auto directory = std::filesystem::u8path(configured);

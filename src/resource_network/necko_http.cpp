@@ -236,7 +236,7 @@ bool NeckoHttp(const std::string& method, const std::string& url, const HeaderPa
       return false;
     }
     if (read) {
-      CaptureHttpError(method, url, candidate);
+      CaptureHttpResponse(method, url, candidate);
       *result = std::move(candidate);
       return true;
     }

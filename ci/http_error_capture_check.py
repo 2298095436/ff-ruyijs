@@ -32,7 +32,8 @@ def main():
     server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    previous = os.environ.pop('RUYIJS_HTTP_ERROR_DIR', None)
+    names = ['RUYIJS_HTTP_ERROR_DIR', 'RUYIJS_HTTP_CAPTURE_DIR', 'RUYIJS_HTTP_CAPTURE_URL']
+    previous = {name: os.environ.pop(name, None) for name in names}
     try:
         with tempfile.TemporaryDirectory(prefix='ruyijs-errors-') as temporary:
             folder = Path(temporary)
@@ -58,11 +59,29 @@ def main():
             assert Handler.count == 3, Handler.count
             print('ok error capture is opt-in, records the original bytes and omits cookie headers', flush=True)
             print('ok successful responses are not captured and no diagnostic request is sent', flush=True)
+            os.environ['RUYIJS_HTTP_CAPTURE_DIR'] = str(folder)
+            # A directory alone must not silently enable broad collection.
+            with Context(timeout=15) as ctx:
+                ctx.navigate(base + '/ok')
+            assert len(list(folder.glob('*.json'))) == 1
+            os.environ['RUYIJS_HTTP_CAPTURE_URL'] = '/ok'
+            with Context(timeout=15) as ctx:
+                ctx.navigate(base + '/ok')
+                assert ctx.eval('document.title') == 'original denial'
+                assert ctx.net_log()[-1]['status'] == 200
+            records = [json.loads(path.read_text()) for path in folder.glob('*.json')]
+            selected = [record for record in records if record['status'] == 200]
+            assert len(records) == 2 and len(selected) == 1, records
+            assert selected[0]['url'] == base + '/ok'
+            assert all(name.lower() != 'set-cookie' for name, _ in selected[0]['headers'])
+            assert Handler.count == 5, Handler.count
+            print('ok successful response capture requires a URL filter and sends no extra requests', flush=True)
     finally:
-        if previous is None:
-            os.environ.pop('RUYIJS_HTTP_ERROR_DIR', None)
-        else:
-            os.environ['RUYIJS_HTTP_ERROR_DIR'] = previous
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
         server.shutdown()
         server.server_close()
 
