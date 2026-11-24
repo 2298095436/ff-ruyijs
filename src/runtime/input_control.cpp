@@ -142,6 +142,11 @@ bool InputRequest(JSContext* cx, TopLevel& top, JS::HandleObject request,
     return resource_wire::Error(cx, "Input needs a target expression or both pointer coordinates");
   JSAutoRealm realm(cx, top.Page());
   JS::RootedObject target(cx), init(cx, &options.toObject());
+  // RPC JSON is parsed in the host codec realm. Coordinate fields must be
+  // defined through a wrapper in this page realm; otherwise SpiderMonkey can
+  // register a host shape's property cache with the page's zone and retain a
+  // stale pointer after the host zone is collected.
+  if (!JS_WrapObject(cx, &init)) return false;
   if (hasTarget) {
     if (!JS_GetProperty(cx, request, "target", &expression)) return false;
     if (!expression.isString()) return resource_wire::Error(cx, "Input target must be an expression");

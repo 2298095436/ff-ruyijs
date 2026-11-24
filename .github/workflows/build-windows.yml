@@ -273,6 +273,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\iframe_monitor_check.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\pointer_gc_check.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\wall_budget_check.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\connect_fallback_check.py"
