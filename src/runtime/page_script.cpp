@@ -128,9 +128,6 @@ bool PageLoad::Source(Owners& owners, JS::HandleObject script, const std::string
     if (!owners.document.ScriptText(script, &inline_source)) return false;
     *filename = base;
     if (is_module) {
-      // Each inline element is a distinct module; relative imports still use
-      // the document URL. A fragment keeps that URL's resolution base intact.
-      *filename += "#ruyijs-inline-module-" + std::to_string(++inlineModuleSequence_);
       if (defer) *defer = true;
     }
     JS::RootedString text(cx, inline_source.isString() ? inline_source.toString() : JS_GetEmptyString(cx));
@@ -234,12 +231,14 @@ bool PageLoad::ExecuteModule(Owners& owners, JS::HandleObject script, JS::Handle
   ModuleSession& session = *context->moduleSession;
   JS::RootedObject module(cx);
   JS::RootedValue promise(cx);
+  JS::RootedValue src(cx);
   std::string source;
-  if (!ToUTF8(cx, code, &source)) return ReportModuleFailure(owners, script, filename);
+  if (!ToUTF8(cx, code, &source) || !owners.document.ScriptAttribute(script, u"src", &src))
+    return ReportModuleFailure(owners, script, filename);
   bool loaded = false;
   {
     ModuleSession::Scope scope(session);
-    loaded = session.Load(filename, source, &module);
+    loaded = session.Load(filename, source, &module, src.isNull());
     if (loaded) loaded = session.Evaluate(module, &promise);
   }
   if (!loaded) return ReportModuleFailure(owners, script, filename);

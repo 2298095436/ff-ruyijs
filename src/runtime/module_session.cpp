@@ -179,10 +179,13 @@ bool ModuleSession::DocumentBase(std::string* base) {
 }
 
 bool ModuleSession::Load(const std::string& url, const std::string& source,
-                         JS::MutableHandleObject module) {
+                         JS::MutableHandleObject module, bool inlineModule) {
   Scope scope(*this);
   if (!hostDefined_) return false;
-  if (JSObject* found = Find(url)) {
+  // Inline elements have distinct records but the document's actual base URL
+  // for import.meta.url and relative imports. The private map key is not a URL.
+  const std::string key = inlineModule ? url + '\0' + std::to_string(++inlineSequence_) : url;
+  if (JSObject* found = Find(key)) {
     module.set(found);
   } else {
     JS::RootedString bytes(cx_, JS_NewStringCopyUTF8N(
@@ -199,7 +202,7 @@ bool ModuleSession::Load(const std::string& url, const std::string& source,
     Record record;
     record.url = url;
     record.module = std::make_unique<JS::PersistentRootedObject>(cx_, compiled);
-    records_.emplace(url, std::move(record));
+    records_.emplace(key, std::move(record));
     module.set(compiled);
   }
   root_ = module;

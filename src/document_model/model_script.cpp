@@ -44,11 +44,9 @@ Status Model::PrepareScript(NodeKey key,bool parser,bool* execute,bool* external
     const auto src=e->get_attribute_ns16({},u"src");
     const auto type=e->get_attribute_ns16({},u"type").value_or(u"");
     const bool classic=domain::script_classic<char16_t>(type);
-    // The first module slice is deliberately limited to parser-inserted,
-    // external, non-async scripts. PageLoad remains the sole coordinator for
-    // fetching, evaluating, and advancing the document lifecycle.
-    const bool module=parser&&ModuleType(type)&&src&&!src->empty()&&
-        !e->has_attribute_ns16({},u"async");
+    // The application loader coordinates both parser and inserted modules.
+    // DOM preparation must admit either form before invoking that loader.
+    const bool module=ModuleType(type);
     if((!classic&&!module)||(classic&&e->has_attribute_ns16({},u"nomodule")))return;
     if(!src && owner.text_content16(key.node).empty())return;
     s.started=true;*execute=true;*external=bool(src);

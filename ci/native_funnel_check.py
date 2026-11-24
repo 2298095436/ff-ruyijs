@@ -51,7 +51,7 @@ def modules():
     for name, markup, expected in [
         ('external', '<script type=module src=main.js></script>', 42),
         ('async external', '<script type=module async src=main.js></script>', 42),
-        ('inline', '<script type=module>import {value} from "./dep.js";window.answer=value+2</script>', 42),
+        ('inline', '<script type=module>import {value} from "./dep.js";window.answer=value+2;window.metaURL=import.meta.url</script>', 42),
         ('inserted external', "<script>const s=document.createElement('script');s.type='module';s.src='main.js';document.head.appendChild(s)</script>", 42),
         ('inserted inline', "<script>const s=document.createElement('script');s.type='module';s.textContent='import {value} from \"./dep.js\";window.answer=value+2';document.head.appendChild(s)</script>", 42),
         ('two distinct inline modules', '<script type=module>window.answer=1</script><script type=module>window.answer+=1</script>', 2),
@@ -71,6 +71,8 @@ def modules():
             check(name + ' module executes its imports', value == expected, value)
             if name in ['external', 'async external', 'inserted external']:
                 check(name + ' module has no currentScript', ctx.eval('window.currentScriptIsNull===true'))
+            if name == 'inline':
+                check('inline import.meta.url is the document URL', ctx.eval('metaURL') == BASE)
 
 
 def forms():

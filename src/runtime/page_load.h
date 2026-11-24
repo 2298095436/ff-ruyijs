@@ -247,7 +247,6 @@ class PageLoad final {
   // navigate again, so the product bounds that recursion. Frame loads share the
   // same budget: they run re-entrantly from the parent's own parse.
   uint32_t depth_ = 0;
-  uint64_t inlineModuleSequence_ = 0;
   // SetDocumentStartScript's source; empty when nothing is installed.
   std::string documentStart_;
   // Reentrancy guard: the document-start script's own document.write or
