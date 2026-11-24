@@ -25,6 +25,10 @@ inline bool input_textual(DomStringView type) {
   return type == u"text" || type == u"search" || type == u"tel" || type == u"url" ||
       type == u"email" || type == u"password";
 }
+inline bool input_selection_applies(DomStringView type) {
+  return type == u"text" || type == u"search" || type == u"tel" || type == u"url" ||
+      type == u"password";
+}
 inline bool input_default_mode(DomStringView type) {
   return type == u"hidden" || type == u"submit" || type == u"image" ||
       type == u"reset" || type == u"button" || type == u"checkbox" || type == u"radio";

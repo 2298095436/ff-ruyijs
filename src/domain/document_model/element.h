@@ -140,6 +140,8 @@ class Element : public Node {
   const InputCheckState& input_check_state() const noexcept { return input_check_; }
   std::optional<DomString>& input_current_value() noexcept { return input_value_; }
   const std::optional<DomString>& input_current_value() const noexcept { return input_value_; }
+  TextControlSelection& input_selection() noexcept { return input_selection_; }
+  const TextControlSelection& input_selection() const noexcept { return input_selection_; }
   bool input_checked() const {
     return input_check_.checked.value_or(has_attribute_ns16({}, u"checked"));
   }
@@ -221,6 +223,7 @@ class Element : public Node {
   std::optional<bool> selected_override_;
   InputCheckState input_check_;
   std::optional<DomString> input_value_;
+  TextControlSelection input_selection_;
   DomString custom_validity_;
   TextareaState textarea_;
   DomString dialog_return_value_;

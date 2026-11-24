@@ -64,11 +64,8 @@ bool InsertText(JSContext* cx, JS::HandleObject element, DomStringView text, boo
     *inserted = true;
     return s.Check(s.model.TextareaRange(entry->key, text, 0, 0, false, u"end"));
   }
-  DomString value;
-  if (!s.Check(s.model.InputText(entry->key, u"value", &value))) return false;
-  const int32_t end = int32_t(value.size());
   *inserted = true;
-  return s.Check(s.model.InputRange(entry->key, text, end, end, true));
+  return s.Check(s.model.InputRange(entry->key, text, 0, 0, false, u"end", true));
 }
 // Whether Enter inserts a line break in `element`: a textarea or an editing
 // host (where it splits the paragraph, inputType insertParagraph).
@@ -120,12 +117,12 @@ bool DeleteBackward(JSContext* cx, JS::HandleObject element, bool* deleted) {
     const uint32_t from = start == end ? uint32_t(start) - 1 : uint32_t(start);
     return s.Check(s.model.TextareaRange(entry->key, u"", from, uint32_t(end), true, u"end"));
   }
-  DomString value;
-  if (!s.Check(s.model.InputText(entry->key, u"value", &value))) return false;
-  if (value.empty()) return true;
+  uint32_t start = 0, end = 0;
+  if (!s.Check(s.model.InputSelection(entry->key, &start, &end, nullptr))) return false;
+  if (start == end && !start) return true;
   *deleted = true;
-  const int32_t end = int32_t(value.size());
-  return s.Check(s.model.InputRange(entry->key, u"", end - 1, end, true));
+  return s.Check(s.model.InputRange(entry->key, u"", start == end ? start - 1 : start,
+                                  end, true, u"end", true));
 }
 // The element ancestors of `target` (inclusive) from the root element down,
 // the elements a pointer entering from outside the document enters.

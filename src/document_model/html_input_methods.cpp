@@ -13,16 +13,21 @@ bool Call(JSContext* cx, unsigned argc, JS::Value* vp) {
   const int method = FunctionSlot(args);
   auto* entry = ControlReceiver(cx, args.thisv(), "HTMLInputElement");
   if (!entry) return false;
+  const unsigned required = method == Selection ? 2 : method == Custom || method == ReplaceRange ? 1 : 0;
+  if (argc < required) return TypeError(cx, "Input method requires arguments");
+  if (method == ReplaceRange && argc == 2) return TypeError(cx, "Input range requires both endpoints");
   auto& state = *entry->owner;
-  DomString text; int32_t start = 0, end = 0; double step = 1;
+  DomString text, mode = u"preserve"; uint32_t start = 0, end = 0; double step = 1;
   if ((method == Custom || method == ReplaceRange) && argc && !ControlString(cx, args[0], &text)) return false;
   if (method == Selection && argc >= 2) {
-    if (argc && !JS::ToInt32(cx, args[0], &start)) return false;
-    if (argc > 1 && !JS::ToInt32(cx, args[1], &end)) return false;
+    if (!JS::ToUint32(cx, args[0], &start) || !JS::ToUint32(cx, args[1], &end)) return false;
     if (argc > 2 && !ControlString(cx, args[2], &text)) return false;
   }
-  if (method == ReplaceRange && argc >= 4) {
-    if (!JS::ToInt32(cx, args[1], &start) || !JS::ToInt32(cx, args[2], &end)) return false;
+  if (method == ReplaceRange && argc >= 3) {
+    if (!JS::ToUint32(cx, args[1], &start) || !JS::ToUint32(cx, args[2], &end)) return false;
+    if (argc >= 4 && !String(cx, args[3], &mode)) return false;
+    if (mode != u"select" && mode != u"start" && mode != u"end" && mode != u"preserve")
+      return TypeError(cx, "Invalid input range selection mode");
   }
   if ((method == StepUp || method == StepDown) && argc && args[0].isNumber()) {
     const double number = args[0].toNumber();
@@ -37,7 +42,13 @@ bool Call(JSContext* cx, unsigned argc, JS::Value* vp) {
     } else if (method == Custom) {
       if (!state.Check(state.model.SetCustomValidity(entry->key, text))) return false;
     } else if (method == ReplaceRange && argc) {
-      if (!state.Check(state.model.InputRange(entry->key, text, start, end, argc >= 4))) return false;
+      uint32_t oldStart = 0, oldEnd = 0, nextStart = 0, nextEnd = 0;
+      if (!state.Check(state.model.InputSelection(entry->key, &oldStart, &oldEnd, nullptr)) ||
+          !state.Check(state.model.InputRange(entry->key, text, start, end, argc >= 3, mode)) ||
+          !state.Check(state.model.InputSelection(entry->key, &nextStart, &nextEnd, nullptr))) return false;
+      if ((oldStart != nextStart || oldEnd != nextEnd) && !QueueInputSelect(*entry)) return false;
+    } else if (method == Selection || method == Select) {
+      if (!UpdateInputSelection(*entry, start, end, text, method == Select ? 4 : 3)) return false;
     } else if (method == StepUp || method == StepDown) {
       if (!state.Check(state.model.SetInputNumber(entry->key, method == StepUp ? step : -step, true))) return false;
     }

@@ -19,9 +19,15 @@ Status Model::SetInputValue(NodeKey key, DomStringView value) noexcept {
       return;
     }
     auto next = domain::input_sanitize(type, value);
+    const bool changed = next != domain::input_value(e);
     auto& current = e.input_current_value();
     State().budget(0, next.size(), current ? current->size() : 0);
     current = std::move(next);
+    if (changed && domain::input_textual(type)) {
+      auto& selection = e.input_selection();
+      selection.start = selection.end = uint32_t(current->size());
+      selection.direction = domain::TextControlSelection::None;
+    }
     State().TouchStyle();
   });
   return status.code == ErrorCode::None && attribute ? SetAttribute(key, u"value", value) : status;

@@ -56,20 +56,86 @@ Status Model::SetInputNumber(NodeKey key, double value, bool step) noexcept {
   });
   return status.code == ErrorCode::None && apply ? SetInputValue(key, text) : status;
 }
-Status Model::InputRange(NodeKey key, DomStringView replacement, int32_t start, int32_t end,
-                         bool explicit_range) noexcept {
-  DomString text; bool apply = false;
+Status Model::InputSelection(NodeKey key, uint32_t* start, uint32_t* end,
+                             DomString* direction, bool* applies) const noexcept {
+  return Protect([&] {
+    const auto& e = State().element(key);
+    const auto length = uint32_t(domain::input_value(e).size());
+    const auto& selection = e.input_selection();
+    if (start) *start = std::min(selection.start, length);
+    if (end) *end = std::min(selection.end, length);
+    if (direction) *direction = selection.direction_name();
+    if (applies) *applies = domain::input_selection_applies(domain::input_type(e));
+  });
+}
+Status Model::SetInputSelection(NodeKey key, uint32_t start, uint32_t end,
+                                DomStringView direction, int field) noexcept {
+  return Protect([&] {
+    auto& e = State().element(key);
+    if (field == 4 && !domain::input_textual(domain::input_type(e))) return;
+    if (field != 4 && !domain::input_selection_applies(domain::input_type(e)))
+      throw domain::DomError(domain::DomErrorCode::InvalidState, "Input type has no selection API");
+    auto& selection = e.input_selection();
+    const auto length = uint32_t(domain::input_value(e).size());
+    selection.start = std::min(selection.start, length);
+    selection.end = std::min(selection.end, length);
+    // 0=start, 1=end, 2=direction, 3=range, 4=select all.
+    if (field == 0) {
+      selection.start = std::min(start, length);
+      selection.end = std::max(selection.start, selection.end);
+    } else if (field == 1) {
+      selection.end = std::min(end, length);
+      selection.start = std::min(selection.start, selection.end);
+    } else if (field == 3 || field == 4) {
+      selection.end = field == 4 ? length : std::min(end, length);
+      selection.start = field == 4 ? 0 : std::min(start, selection.end);
+    }
+    if (field >= 2) selection.direction = domain::TextControlSelection::parse_direction(direction);
+  });
+}
+Status Model::InputRange(NodeKey key, DomStringView replacement, uint32_t start, uint32_t end,
+                         bool explicit_range, DomStringView mode, bool user_edit) noexcept {
+  DomString text;
+  uint32_t selection_start = 0, selection_end = 0;
+  bool apply = false;
   auto status = Protect([&] {
     const auto& e = State().element(key);
-    apply = domain::input_textual(domain::input_type(e));
+    const auto type = domain::input_type(e);
+    if (!user_edit && !domain::input_selection_applies(type))
+      throw domain::DomError(domain::DomErrorCode::InvalidState, "Input type has no range replacement API");
+    apply = domain::input_textual(type);
     if (!apply) return;
     text = domain::input_value(e);
-    size_t first = explicit_range ? std::min(size_t(uint32_t(start)), text.size()) : 0;
-    size_t last = explicit_range ? std::min(size_t(uint32_t(end)), text.size()) : text.size();
-    if (first > last) std::swap(first, last);
-    State().budget(0, replacement.size(), last - first);
+    const auto& selection = e.input_selection();
+    selection_start = std::min(selection.start, uint32_t(text.size()));
+    selection_end = std::min(selection.end, uint32_t(text.size()));
+    if (!explicit_range) { start = selection_start; end = selection_end; }
+    if (start > end)
+      throw domain::DomError(domain::DomErrorCode::IndexSize, "Input range start exceeds end");
+    const size_t first = std::min(size_t(start), text.size());
+    const size_t last = std::min(size_t(end), text.size());
     text.replace(first, last - first, replacement);
+    const auto after = uint32_t(first + replacement.size());
+    if (mode == u"select") { selection_start = uint32_t(first); selection_end = after; }
+    else if (mode == u"start") selection_start = selection_end = uint32_t(first);
+    else if (mode == u"end") selection_start = selection_end = after;
+    else {
+      const int64_t delta = int64_t(replacement.size()) - int64_t(last - first);
+      if (selection_start > last) selection_start = uint32_t(int64_t(selection_start) + delta);
+      else if (selection_start > first) selection_start = uint32_t(first);
+      if (selection_end > last) selection_end = uint32_t(int64_t(selection_end) + delta);
+      else if (selection_end > first) selection_end = after;
+    }
   });
-  return status.code == ErrorCode::None && apply ? SetInputValue(key, text) : status;
+  if (status.code != ErrorCode::None || !apply) return status;
+  status = SetInputValue(key, text);
+  if (status.code != ErrorCode::None) return status;
+  return Protect([&] {
+    auto& selection = State().element(key).input_selection();
+    const auto length = uint32_t(domain::input_value(State().element(key)).size());
+    selection.end = std::min(selection_end, length);
+    selection.start = std::min(selection_start, selection.end);
+    selection.direction = domain::TextControlSelection::None;
+  });
 }
 }

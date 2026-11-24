@@ -5,7 +5,7 @@
 
 namespace ruyijs::document_model {
 namespace {
-enum Kind { Text, Boolean, Checked, Numeric, Null, Indeterminate, Zero, Direction, Will, Validity, Message, Number, DefaultChecked, Form, Files };
+enum Kind { Text, Boolean, Checked, Numeric, Null, Indeterminate, Start, End, Direction, Will, Validity, Message, Number, DefaultChecked, Form, Files };
 struct Property { const char* name; const char16_t* attr; Kind kind; bool set; };
 const Property kProperties[] = {
   {"accept",u"accept",Text,true},{"alt",u"alt",Text,true},{"autocomplete",u"autocomplete",Text,true},
@@ -22,7 +22,7 @@ const Property kProperties[] = {
   {"defaultValue",u"defaultValue",Text,true},{"value",u"value",Text,true},{"valueAsDate",u"",Null,true},
   {"valueAsNumber",u"valueAsNumber",Number,true},{"width",u"width",Numeric,true},
   {"willValidate",u"",Will,false},{"validity",u"",Validity,false},{"validationMessage",u"",Message,false},
-  {"labels",u"",Null,false},{"selectionStart",u"",Zero,true},{"selectionEnd",u"",Zero,true},
+  {"labels",u"",Null,false},{"selectionStart",u"",Start,true},{"selectionEnd",u"",End,true},
   {"selectionDirection",u"",Direction,true},{"align",u"align",Text,true},{"useMap",u"usemap",Text,true},
   {"webkitdirectory",u"webkitdirectory",Boolean,true}
 };
@@ -45,7 +45,13 @@ bool Get(JSContext* cx, unsigned argc, JS::Value* vp) {
       if (!state.Check(state.model.InputChecked(entry->key, &value, p.kind == Indeterminate))) return false;
       result.setBoolean(value);
     }
-    else if (p.kind == Zero) result.setInt32(0);
+    else if (p.kind == Start || p.kind == End || p.kind == Direction) {
+      uint32_t start = 0, end = 0; bool applies = false;
+      if (!state.Check(state.model.InputSelection(entry->key, &start, &end, &text, &applies))) return false;
+      if (!applies) result.setNull();
+      else if (p.kind == Direction) { if (!Value(cx, DomStringView(text), &result)) return false; }
+      else result.setNumber(p.kind == Start ? start : end);
+    }
     else if (p.kind == Numeric || p.kind == Number) {
       double number;
       if (!state.Check(state.model.InputNumber(entry->key, p.attr, &number))) return false;
@@ -62,7 +68,6 @@ bool Get(JSContext* cx, unsigned argc, JS::Value* vp) {
       result.setBoolean(attr.has_value());
     } else {
       if (p.kind == Text && !state.Check(state.model.InputText(entry->key, p.attr, &text))) return false;
-      if (p.kind == Direction) text = u"none";
       uint32_t flags;
       if (p.kind == Message && !state.Check(state.model.ControlValidation(entry->key, &flags, &text))) return false;
       if (!Value(cx, DomStringView(text), &result)) return false;
@@ -77,10 +82,12 @@ bool Set(JSContext* cx, unsigned argc, JS::Value* vp) {
   auto* entry = ControlReceiver(cx, args.thisv(), "HTMLInputElement");
   if (!entry) return false;
   auto& state = *entry->owner;
-  DomString text; bool present = true, apply = true;
+  DomString text; bool present = true, apply = true; uint32_t endpoint = 0;
   if (p.kind == Boolean || p.kind == Checked || p.kind == DefaultChecked || p.kind == Indeterminate)
     present = JS::ToBoolean(args.get(0));
-  else if (p.kind == Text || p.kind == Direction) {
+  else if (p.kind == Start || p.kind == End) {
+    if (!JS::ToUint32(cx, args.get(0), &endpoint)) return false;
+  } else if (p.kind == Text || p.kind == Direction) {
     if (DomStringView(p.attr) == u"value" && args.get(0).isNull()) {
       text.clear();
     } else if (DomStringView(p.attr) == u"value" || DomStringView(p.attr) == u"defaultValue" ||
@@ -100,6 +107,9 @@ bool Set(JSContext* cx, unsigned argc, JS::Value* vp) {
     state.Observe("HTMLInputElement", p.name, int(ApiAccess::Write));
     if (p.kind == Files) {
       if (!SetInputFiles(*entry, args.get(0))) return false;
+    } else if (p.kind == Start || p.kind == End || p.kind == Direction) {
+      if (!UpdateInputSelection(*entry, endpoint, endpoint, text,
+                                p.kind == Start ? 0 : p.kind == End ? 1 : 2)) return false;
     } else if (p.kind == Checked || p.kind == Indeterminate) {
       if (!state.Check(state.model.SetInputChecked(entry->key, present, p.kind == Indeterminate))) return false;
     } else if (p.kind == DefaultChecked) {

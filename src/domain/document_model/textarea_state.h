@@ -3,8 +3,7 @@
 
 namespace ruyijs::domain::document_model {
 // Owned by the original Element, never by a JS facade or an adapter cache.
-struct TextareaState {
-  DomString value;
+struct TextControlSelection {
   uint32_t start = 0, end = 0;
   enum Direction { None, Forward, Backward } direction = None;
   static Direction parse_direction(DomStringView value) {
@@ -13,5 +12,8 @@ struct TextareaState {
   DomStringView direction_name() const {
     return direction == Forward ? u"forward" : direction == Backward ? u"backward" : u"none";
   }
+};
+struct TextareaState : TextControlSelection {
+  DomString value;
 };
 }

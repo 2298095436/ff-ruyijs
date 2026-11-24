@@ -276,6 +276,8 @@ jobs:
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\pointer_gc_check.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\form_collection_check.py"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\input_selection_check.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\wall_budget_check.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

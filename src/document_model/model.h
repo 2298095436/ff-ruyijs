@@ -550,7 +550,11 @@ class Model final {
   Status SetInputChecked(NodeKey, bool value, bool indeterminate = false) noexcept;
   Status ControlValidation(NodeKey, uint32_t* flags, DomString* message = nullptr) const noexcept;
   Status SetInputNumber(NodeKey, double value, bool step) noexcept;
-  Status InputRange(NodeKey, DomStringView replacement, int32_t start, int32_t end, bool explicit_range) noexcept;
+  Status InputSelection(NodeKey, uint32_t* start, uint32_t* end, DomString* direction,
+                        bool* applies = nullptr) const noexcept;
+  Status SetInputSelection(NodeKey, uint32_t start, uint32_t end, DomStringView direction, int field) noexcept;
+  Status InputRange(NodeKey, DomStringView replacement, uint32_t start, uint32_t end,
+                    bool explicit_range, DomStringView mode = u"preserve", bool user_edit = false) noexcept;
   Status TextareaText(NodeKey, DomStringView name, DomString* result) const noexcept;
   Status TextareaNumber(NodeKey, DomStringView name, double* result) const noexcept;
   Status TextareaWillValidate(NodeKey, bool* result) const noexcept;
