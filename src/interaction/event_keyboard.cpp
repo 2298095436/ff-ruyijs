@@ -67,8 +67,14 @@ bool GetUiWhich(JSContext* cx, unsigned argc, JS::Value* vp) {
   Event* event = Receiver(cx, args, Iface::UI, true);
   if (!event) return false;
   ReportEventAccess(cx, event, "UIEvent", "which", int(ApiAccess::Read));
-  args.rval().setNumber(event->kind == Kind::Keyboard ?
-      KeyboardCodeValue(cx, event, domain::KeyboardCode::Which) : 0);
+  uint32_t which = 0;
+  if (event->kind == Kind::Keyboard)
+    which = KeyboardCodeValue(cx, event, domain::KeyboardCode::Which);
+  else if (IsA(event->kind, Iface::Mouse))
+    // Firefox MouseEvent::Which is Button()+1, inherited by Pointer, Wheel
+    // and DragEvent. Read the original event slot, not an overridable getter.
+    which = uint32_t(JS::GetReservedSlot(event->object, kEventButton).toInt32() + 1);
+  args.rval().setNumber(which);
   return true;
 }
 bool GetKeyboardModifierState(JSContext* cx, unsigned argc, JS::Value* vp) {
