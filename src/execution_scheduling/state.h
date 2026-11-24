@@ -3,6 +3,7 @@
 #include "execution_scheduling/realm.h"
 #include "domain/execution_scheduling/public_handles.h"
 #include <chrono>
+#include <algorithm>
 #include <functional>
 #include <unordered_map>
 #include <vector>
@@ -99,8 +100,18 @@ struct State {
   bool messageReplay = false;
   std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
   ExternalWork external;
+  bool wallBound = false;
+  std::chrono::steady_clock::time_point wallDeadline;
+  bool WallExpired() const { return wallBound && std::chrono::steady_clock::now() >= wallDeadline; }
+  double WallRemaining() const {
+    return wallBound ? std::max(0.0, std::chrono::duration<double, std::milli>(
+        wallDeadline - std::chrono::steady_clock::now()).count()) : 1e12;
+  }
   bool ExternalPending() const { return external.pending && external.pending(external.context); }
-  bool ExternalReady(uint32_t ms) { return external.wait && external.wait(external.context, ms); }
+  bool ExternalReady(uint32_t ms) {
+    if (wallBound && double(ms) > WallRemaining()) ms = uint32_t(WallRemaining());
+    return external.wait && external.wait(external.context, ms);
+  }
   // Runs one external completion as a task, then its microtask checkpoint.
   bool RunExternal();
   // Waits for an external completion: on the system clock until `until` at

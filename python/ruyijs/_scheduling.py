@@ -73,13 +73,16 @@ class SchedulingControl:
         """Return planned URL, field count and binding status without advancing time."""
         return self._event_loop("navigation_replay_status")
 
-    def advance(self, ms, step_ms=16.667, max_tasks=100000):
+    def advance(self, ms, step_ms=16.667, max_tasks=100000, *, max_wall_ms=None):
         """Advance the runtime clock, running bounded macro tasks and engine jobs.
 
-        Logical time advances without wall-clock waiting. System mode waits.
+        Logical time advances independently of external HTTP time. System mode waits.
         An exhausted budget returns the actual stopping point and retains work.
+        max_wall_ms optionally bounds cooperative waiting and task dispatch in
+        wall time. A running JS callback is not preempted by this budget.
         """
-        return self._event_loop("advance", ms=ms, step_ms=step_ms, max_tasks=max_tasks)
+        fields = {} if max_wall_ms is None else {"max_wall_ms": max_wall_ms}
+        return self._event_loop("advance", ms=ms, step_ms=step_ms, max_tasks=max_tasks, **fields)
 
     def drain_timers(self, max_tasks=100000):
         """Run currently due timers without manually advancing the clock."""

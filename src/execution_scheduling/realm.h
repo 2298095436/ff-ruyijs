@@ -125,7 +125,7 @@ class Realm final {
   // Whether this page already has a navigation record.
   bool HasNavigation(JS::HandleObject page);
   bool ValidateAdvance(double ms, double step, uint32_t maxTasks);
-  RunResult Advance(double ms, double step, uint32_t maxTasks);
+  RunResult Advance(double ms, double step, uint32_t maxTasks, double maxWallMs = -1);
   // A realm lifecycle may stop during the initial microtask checkpoint.
   RunResult Drain(uint32_t maxTasks, bool (*continueTasks)(void*) = nullptr, void* context = nullptr);
   // Debug-session port: reports accesses to the timer, frame, microtask and

@@ -125,6 +125,7 @@ case "$step" in
     "${clean[@]}" "$venv/bin/python" "$root/ci/http_timeout_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/diagnostics_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/native_funnel_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/wall_budget_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/connect_fallback_check.py"
     # One real page load through the bundled Necko helper, direct and through
     # a local CONNECT proxy.

@@ -89,18 +89,23 @@ bool SchedulingControl::Request(JS::HandleObject request, JS::MutableHandleValue
   }
   if (action != "advance" && action != "drain") return Error(cx_, "Unknown event_loop action");
   const bool advance = action == "advance";
-  if (advance ? !Fields(cx_, request, {"ms", "step_ms", "max_tasks"}) :
+  if (advance ? !Fields(cx_, request, {"ms", "step_ms", "max_tasks", "max_wall_ms"}) :
                 !Fields(cx_, request, {"max_tasks"})) return false;
-  double ms = 0, step = 16.667, budget = 100000;
+  double ms = 0, step = 16.667, budget = 100000, maxWallMs = -1;
   if ((advance && (!Number(cx_, request, "ms", &ms, true) ||
-                   !Number(cx_, request, "step_ms", &step))) ||
+                   !Number(cx_, request, "step_ms", &step) ||
+                   !Number(cx_, request, "max_wall_ms", &maxWallMs))) ||
       !Number(cx_, request, "max_tasks", &budget)) return false;
   if (std::trunc(budget) != budget || budget < 1 || budget > 100000)
     return Error(cx_, "Task budget must be an integer from 1 to 100000", true);
+  bool hasWall = false;
+  if (advance && !JS_HasOwnProperty(cx_, request, "max_wall_ms", &hasWall)) return false;
+  if (hasWall && (maxWallMs < 0 || maxWallMs > 60000))
+    return Error(cx_, "Wall budget must be a number from 0 to 60000 ms", true);
   if (!owner_.ValidateAdvance(ms, step, uint32_t(budget))) return false;
   environment_.Freeze();
   owner_.Freeze();
-  const auto status = advance ? owner_.Advance(ms, step, uint32_t(budget)) : owner_.Drain(uint32_t(budget));
+  const auto status = advance ? owner_.Advance(ms, step, uint32_t(budget), maxWallMs) : owner_.Drain(uint32_t(budget));
   return Describe(status, result);
 }
 }

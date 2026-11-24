@@ -11,7 +11,7 @@ bool State::RunExternal() {
 bool State::AwaitExternal(double until, double step) {
   if (!ExternalPending()) return false;
   if (model.Clock().logical) {
-    while (ExternalPending()) if (ExternalReady(1000)) return true;
+    while (ExternalPending() && !WallExpired()) if (ExternalReady(1000)) return true;
     return false;
   }
   WaitUntil(until, step);
@@ -21,6 +21,7 @@ void Realm::SetExternalWork(const ExternalWork& work) { state_->external = work;
 bool Realm::RunExternalTask() {
   auto& s = *state_;
   for (;;) {
+    if (s.WallExpired()) return false;
     if (s.RunExternal()) return true;
     if (!s.ExternalPending()) return false;
     s.ExternalReady(1000);
@@ -29,6 +30,7 @@ bool Realm::RunExternalTask() {
 Realm::ExternalStep Realm::RunExternalOrDueTask() {
   auto& s = *state_;
   for (;;) {
+    if (s.WallExpired()) return ExternalStep::TaskDue;
     if (s.RunExternal()) return ExternalStep::Ran;
     if (!s.ExternalPending()) return ExternalStep::Idle;
     // Logical time does not move while a transport is pending, so no task can
@@ -54,8 +56,21 @@ bool Realm::ValidateAdvance(double ms, double step, uint32_t maxTasks) {
     return Error(state_->cx, "Advance exceeds the exact logical millisecond range", true);
   return true;
 }
-RunResult Realm::Advance(double ms, double step, uint32_t maxTasks) {
+RunResult Realm::Advance(double ms, double step, uint32_t maxTasks, double maxWallMs) {
   auto& s = *state_;
+  struct RestoreDeadline {
+    State& state;
+    bool bound;
+    std::chrono::steady_clock::time_point deadline;
+    ~RestoreDeadline() { state.wallBound = bound; state.wallDeadline = deadline; }
+  } restore{s, s.wallBound, s.wallDeadline};
+  if (maxWallMs >= 0) {
+    const auto deadline = std::chrono::steady_clock::now() +
+        std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+            std::chrono::duration<double, std::milli>(maxWallMs));
+    if (!s.wallBound || deadline < s.wallDeadline) s.wallDeadline = deadline;
+    s.wallBound = true;
+  }
   s.frozen = true;
   s.SyncClock();
   const double target = s.model.Clock().now + ms;
@@ -64,6 +79,7 @@ RunResult Realm::Advance(double ms, double step, uint32_t maxTasks) {
   bool exhausted = false;
   while (true) {
     s.SyncClock();
+    if (s.WallExpired()) { exhausted = true; break; }
     if (executed < maxTasks && s.RunExternal()) { ++executed; continue; }
     auto now = s.model.Inspect();
     const bool frameBatch = s.model.FramePending();
@@ -75,6 +91,7 @@ RunResult Realm::Advance(double ms, double step, uint32_t maxTasks) {
     if (!frameBatch) {
       if (!now.has_next || now.next > target) {
         if (s.AwaitExternal(target, step)) continue;
+        if (s.WallExpired()) { exhausted = true; break; }
         if (now.now < target) s.WaitUntil(target, step);
         break;
       }
@@ -89,12 +106,14 @@ RunResult Realm::Advance(double ms, double step, uint32_t maxTasks) {
         s.WaitUntil(turn, step);
       }
     }
+    if (s.WallExpired()) { exhausted = true; break; }
     TaskSnapshot task;
     if (!s.model.Claim(&task, frameBatch)) break;
     s.Invoke(task);
     ++executed;
   }
   s.SyncClock();
+  exhausted = exhausted || s.WallExpired();
   return {s.model.Inspect(), executed, exhausted};
 }
 RunResult Realm::Drain(uint32_t maxTasks, bool (*continueTasks)(void*), void* context) {
@@ -103,7 +122,7 @@ RunResult Realm::Drain(uint32_t maxTasks, bool (*continueTasks)(void*), void* co
   s.SyncClock();
   s.CheckpointJobs();
   uint32_t executed = 0;
-  while (executed < maxTasks && (!continueTasks || continueTasks(context))) {
+  while (executed < maxTasks && !s.WallExpired() && (!continueTasks || continueTasks(context))) {
     s.SyncClock();
     if (s.RunExternal()) { ++executed; continue; }
     TaskSnapshot task;

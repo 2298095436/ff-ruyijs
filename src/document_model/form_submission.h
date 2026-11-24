@@ -1,6 +1,7 @@
 #pragma once
 #include "document_model/model.h"
 #include "js/RootingAPI.h"
+#include "js/GCVector.h"
 namespace ruyijs::document_model {
 class Realm;
 struct FormField { DomString name, value; bool emptyFile = false; };

@@ -77,7 +77,8 @@ void State::WaitUntil(double time, double step) {
   if (model.Clock().logical) { model.SetTime(time); return; }
   SyncClock();
   while (model.Clock().now < time) {
-    double duration = std::min({time - model.Clock().now, step, 50.0});
+    if (WallExpired()) break;
+    double duration = std::min({time - model.Clock().now, step, 50.0, WallRemaining()});
     // A ready external completion ends the wait: it runs as the next task.
     if (ExternalPending()) {
       if (ExternalReady(uint32_t(std::ceil(duration)))) { SyncClock(); return; }
