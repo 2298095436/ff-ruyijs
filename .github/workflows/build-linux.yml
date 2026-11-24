@@ -27,6 +27,8 @@ jobs:
       CXX: clang++-21
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
       CCACHE_DIR: /home/runner/.cache/ccache
+      # CMake supplies a precompiled JSAPI header to native translation units.
+      CCACHE_SLOPPINESS: pch_defines,time_macros
     steps:
       - name: Runner facts
         run: |
@@ -169,6 +171,10 @@ jobs:
         with:
           path: /home/runner/.cache/ccache
           key: ${{ steps.native-cache.outputs.cache-primary-key }}
+
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache --show-stats || true
 
       - name: Upload the wheel
         if: always()
