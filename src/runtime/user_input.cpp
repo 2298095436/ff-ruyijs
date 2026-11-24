@@ -3,6 +3,7 @@
 // outside, down/up/click with click as a PointerEvent (pointerId 0), and per
 // character typing (user_keyboard.cpp).
 #include "runtime/user_input.h"
+#include "runtime/input_control.h"
 #include "runtime/runtime.h"
 #include "runtime/user_input_internal.h"
 #include "runtime/browsing_context.h"
@@ -46,13 +47,14 @@ bool Mouse(JSContext* cx, JS::HandleObject target, const char* type, double x, d
   return init.Send(target, type, clock, allowed);
 }
 bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, double hold,
-           SchedulingControl& clock) {
-  if (!active.environment->InnerScreenOrigin(&gScreen.x, &gScreen.y)) return false;
+           SchedulingControl& clock, const std::array<double, 4>* point = nullptr) {
+  if (point) { gScreen.x = (*point)[2]; gScreen.y = (*point)[3]; }
+  else if (!active.environment->InnerScreenOrigin(&gScreen.x, &gScreen.y)) return false;
   std::array<double, 4> rect{};
   bool present = false;
-  if (!active.geometry->MeasureElement(target, &rect, &present, false)) JS_ClearPendingException(cx);
-  const double x = present ? std::round(rect[0] + rect[2] / 2) : 0;
-  const double y = present ? std::round(rect[1] + rect[3] / 2) : 0;
+  if (!point && !active.geometry->MeasureElement(target, &rect, &present, false)) JS_ClearPendingException(cx);
+  const double x = point ? (*point)[0] : present ? std::round(rect[0] + rect[2] / 2) : 0;
+  const double y = point ? (*point)[1] : present ? std::round(rect[1] + rect[3] / 2) : 0;
   JS::RootedObjectVector path(cx);
   if (!document_model::ElementPath(cx, target, &path)) return false;
   JS::RootedObject node(cx);
@@ -98,12 +100,15 @@ bool UserInputRequest(JSContext* cx, TopLevel& top, JS::HandleObject request,
                       SchedulingControl& scheduling, JS::MutableHandleValue result) {
   std::string action, text, key, expression;
   double hold = 80, interval = 60;
-  bool hasTarget = false;
-  if (!resource_wire::Fields(cx, request, {"id", "op", "action", "target", "text", "key", "hold_ms", "interval_ms"}) ||
+  bool hasTarget = false, hasX = false, hasY = false;
+  if (!resource_wire::Fields(cx, request, {"id", "op", "action", "target", "x", "y", "text", "key", "hold_ms", "interval_ms"}) ||
       !resource_wire::Property(cx, request, "action", &action, 16, resource_wire::TextKind::ASCII) ||
       !JS_HasProperty(cx, request, "target", &hasTarget) ||
+      !JS_HasProperty(cx, request, "x", &hasX) || !JS_HasProperty(cx, request, "y", &hasY) ||
       (hasTarget && !resource_wire::Property(cx, request, "target", &expression, 65536)) ||
       !Delay(cx, request, "hold_ms", &hold) || !Delay(cx, request, "interval_ms", &interval)) return false;
+  if ((hasX || hasY) && (action != "click" || hasTarget || !hasX || !hasY))
+    return resource_wire::Error(cx, "Coordinate click needs both x/y and no target expression");
   BrowsingContext& active = top.Active();
   JSAutoRealm realm(cx, active.page);
   JS::RootedObject target(cx);
@@ -119,6 +124,24 @@ bool UserInputRequest(JSContext* cx, TopLevel& top, JS::HandleObject request,
   }
   scheduling.Freeze();
   if (action == "click") {
+    if (hasX && hasY) {
+      JS::RootedValue xValue(cx), yValue(cx);
+      if (!JS_GetProperty(cx, request, "x", &xValue) || !JS_GetProperty(cx, request, "y", &yValue)) return false;
+      if (!xValue.isNumber() || !yValue.isNumber() ||
+          !std::isfinite(xValue.toNumber()) || !std::isfinite(yValue.toNumber()))
+        return resource_wire::Error(cx, "Pointer coordinates must be finite numbers", true);
+      double x = xValue.toNumber(), y = yValue.toNumber(), screenX = 0, screenY = 0;
+      if (!active.environment->InnerScreenOrigin(&screenX, &screenY)) return false;
+      screenX += x; screenY += y;
+      BrowsingContext* owner = nullptr;
+      if (!ResolvePointerTarget(cx, active, &x, &y, &target, &owner)) return false;
+      if (!target) { result.setBoolean(false); return true; }
+      JSAutoRealm targetRealm(cx, owner->page);
+      const std::array<double, 4> point{x, y, screenX - x, screenY - y};
+      if (!Click(cx, *owner, target, hold, scheduling, &point)) return false;
+      result.setBoolean(true);
+      return true;
+    }
     if (!target) return resource_wire::Error(cx, "click needs a target");
     if (!Click(cx, active, target, hold, scheduling)) return false;
   } else if (action == "type" || action == "press") {

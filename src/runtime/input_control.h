@@ -4,6 +4,9 @@
 namespace ruyijs {
 class SchedulingControl;
 class TopLevel;
+struct BrowsingContext;
+bool ResolvePointerTarget(JSContext*, BrowsingContext&, double* x, double* y,
+                          JS::MutableHandleObject target, BrowsingContext** owner);
 bool InputRequest(JSContext*, TopLevel&, JS::HandleObject request,
                   SchedulingControl&, JS::MutableHandleValue result);
 }

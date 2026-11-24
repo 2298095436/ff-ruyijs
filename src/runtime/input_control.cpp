@@ -131,6 +131,10 @@ bool InspectPoint(JSContext* cx, BrowsingContext& owner, JS::HandleObject target
   return JS_WrapValue(cx, result);
 }
 }
+bool ResolvePointerTarget(JSContext* cx, BrowsingContext& top, double* x, double* y,
+                          JS::MutableHandleObject target, BrowsingContext** owner) {
+  return PointTarget(cx, top, x, y, target, owner);
+}
 bool InputRequest(JSContext* cx, TopLevel& top, JS::HandleObject request,
                   SchedulingControl& scheduling, JS::MutableHandleValue result) {
   std::string type;

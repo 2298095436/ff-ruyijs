@@ -66,6 +66,21 @@ class InputControl:
             raise TypeError("click target must be a string expression")
         return self._user(action="click", target=target, hold_ms=hold_ms)
 
+    def click_at(self, *, x, y, hold_ms=80):
+        """Click a native painted target at top-level viewport coordinates.
+
+        Enters closed shadow trees and live iframe viewports, then uses the
+        normal trusted click sequence, focus, cancellation and activation.
+        The event loop runs during hold_ms, as in click(). Returns False if
+        the point has no rendered target. Page DOM getters cannot choose it.
+        """
+        for value in (x, y):
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise TypeError("pointer coordinates must be numbers")
+            if not math.isfinite(value):
+                raise ValueError("pointer coordinates must be finite")
+        return self._user(action="click", x=x, y=y, hold_ms=hold_ms)
+
     def type(self, text, *, target=None, interval_ms=60):
         """Type `text` into the focused element (or focus `target` first).
 
