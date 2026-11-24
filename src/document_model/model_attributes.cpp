@@ -1,5 +1,7 @@
 #include "document_model/model_internal.h"
 #include "domain/document_model/attribute_factory.h"
+#include "domain/styling/css_declarations.h"
+#include <algorithm>
 
 namespace ruyijs::document_model {
 namespace {
@@ -11,6 +13,21 @@ void NoteIdChange(domain::DocumentAggregate& document, domain::NodeId node,
   if (previous == next) return;
   document.note_element_id(node, previous ? DomStringView(*previous) : DomStringView(),
                            next ? DomStringView(*next) : DomStringView());
+}
+// Ignore only dimensions. Custom properties, display, animation properties,
+// font inputs and every other declaration remain conservative invalidations.
+bool AnimationStyleChanged(DomStringView before, DomStringView after) {
+  auto projection = [](DomStringView text) {
+    auto rows = ruyijs::domain::styling::CssDeclarations(domain::to_utf8(text));
+    std::erase_if(rows, [](const auto& row) { return row.name == "width" || row.name == "height"; });
+    return rows;
+  };
+  const auto a = projection(before), b = projection(after);
+  if (a.size() != b.size()) return true;
+  for (size_t i = 0; i < a.size(); ++i)
+    if (a[i].name != b[i].name || a[i].value != b[i].value || a[i].important != b[i].important ||
+        a[i].pending_shorthand != b[i].pending_shorthand) return true;
+  return false;
 }
 }  // namespace
 Status PublicAttributeName(DomStringView qualified, AttributeSnapshot* result) noexcept {
@@ -41,7 +58,8 @@ Status Model::SetAttribute(NodeKey key, DomStringView name, DomStringView value)
     // or NamedNodeMap membership can change; creating style adds an Attr entry.
     const bool is_style = element.tag_name().folds_case() ? domain::ascii_lower(DomString(name)) == u"style"
                                                           : name == u"style";
-    if (old && (is_style || DomStringView(*old) == value)) State().TouchStyle(connected);
+    if (old && (is_style || DomStringView(*old) == value))
+      State().TouchStyle(connected, !is_style || AnimationStyleChanged(*old, value));
     else if (domain::ascii_lower(DomString(name)) == u"class") State().TouchClass(connected);
     else State().TouchAttribute(connected);
   });

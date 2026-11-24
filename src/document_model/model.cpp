@@ -112,6 +112,7 @@ uint64_t Model::Revision() const noexcept { return impl_ ? impl_->revision : 0; 
 uint64_t Model::StructureRevision() const noexcept { return impl_ ? impl_->structure : 0; }
 uint64_t Model::TreeRevision() const noexcept { return impl_ ? impl_->tree : 0; }
 uint64_t Model::ConnectedRevision() const noexcept { return impl_ ? impl_->connected : 0; }
+uint64_t Model::AnimationRevision() const noexcept { return impl_ ? impl_->animation : 0; }
 bool Model::IsConnected(NodeKey key) const noexcept {
   return impl_ ? impl_->IsComposedConnected(key) : false;
 }

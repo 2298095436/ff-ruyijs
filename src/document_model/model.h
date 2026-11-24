@@ -248,6 +248,7 @@ class Model final {
   // Unchanged by attribute writes on disconnected elements (such as a scratch
   // element created for inline CSS parsing), so connected style/layout caches stay warm.
   uint64_t ConnectedRevision() const noexcept;
+  uint64_t AnimationRevision() const noexcept;
   bool IsConnected(NodeKey) const noexcept;
   // The revision of the tree shape and class attributes: unchanged by non-class
   // attribute writes, so class-based collections and classList views stay live

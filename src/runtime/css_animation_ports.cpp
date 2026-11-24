@@ -114,7 +114,8 @@ void BindCssAnimationPorts(BrowsingContext& owner) {
   ports.context = &owner;
   ports.revision = [](void* raw) -> uint64_t {
     auto& c = *static_cast<BrowsingContext*>(raw);
-    return (c.document->AnimationRevision() * 1099511628211ull) ^ (c.styling->AnimationRevision() + 1);
+    return (c.document->AnimationRevision(c.animationStyleAttributeDependency) * 1099511628211ull) ^
+        (c.styling->AnimationRevision() + 1);
   };
   ports.read = [](void* raw, JS::MutableHandleObjectVector targets, std::vector<web_animation::CssAnimationInput>* out) {
     auto& c = *static_cast<BrowsingContext*>(raw);
@@ -152,6 +153,9 @@ void BindCssAnimationPorts(BrowsingContext& owner) {
         if (out->size() >= 4096) { JS_ReportErrorASCII(c.cx, "CSS animation budget exceeded"); return false; }
       }
     }
+    const auto& dependencies = reader->Dependencies();
+    c.animationStyleAttributeDependency = !reader->Scopes() || dependencies.styleAttribute ||
+        dependencies.hasAttributes.count("style") != 0;
     return true;
   };
   owner.animation->SetCssPorts(ports);

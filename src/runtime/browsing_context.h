@@ -103,6 +103,8 @@ struct BrowsingContext {
   std::unique_ptr<web_midi::Realm> midi;
   std::unique_ptr<web_gamepad::Realm> gamepad;
   std::unique_ptr<web_animation::Realm> animation;
+  // The last native animation cascade read's dependency on the raw style attribute.
+  bool animationStyleAttributeDependency = true;
   std::unique_ptr<web_service_worker::Realm> serviceWorker;
   // BroadcastChannel between this Context's Window realms and worker processes.
   std::unique_ptr<BroadcastRoute> broadcastRoute;

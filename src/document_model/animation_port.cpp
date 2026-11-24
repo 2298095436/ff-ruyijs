@@ -55,7 +55,9 @@ bool Realm::AnimationInScope(JS::HandleObject root, JS::HandleObject object, boo
   if (!subtree) { *result = Same(r->key, n->key); return true; }
   return owner.Check(owner.model.Contains(r->key, n->key, result));
 }
-uint64_t Realm::AnimationRevision() { return state_->model.ConnectedRevision(); }
+uint64_t Realm::AnimationRevision(bool styleAttributeDependency) {
+  return styleAttributeDependency ? state_->model.ConnectedRevision() : state_->model.AnimationRevision();
+}
 bool Realm::AnimationElements(JS::MutableHandleObjectVector out) {
   State& state = *state_;
   std::vector<NodeKey> nodes;

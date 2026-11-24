@@ -93,12 +93,19 @@ struct Model::Impl {
   uint64_t classes = 1;
   // Unchanged by edits of elements outside a document (ConnectedRevision).
   uint64_t connected = 0;
-  void Touch() noexcept { ++revision; ++structure; ++tree; ++classes; ++connected; }
+  // All connected changes except inline width/height-only updates. Styling
+  // falls back to ConnectedRevision when selectors read the style attribute.
+  uint64_t animation = 0;
+  void Touch() noexcept { ++revision; ++structure; ++tree; ++classes; ++connected; ++animation; }
   void TouchClass(bool in_document = true) noexcept {
-    ++revision; ++structure; ++classes; if (in_document) ++connected;
+    ++revision; ++structure; ++classes; if (in_document) { ++connected; ++animation; }
   }
-  void TouchAttribute(bool in_document = true) noexcept { ++revision; ++structure; if (in_document) ++connected; }
-  void TouchStyle(bool in_document = true) noexcept { ++revision; if (in_document) ++connected; }
+  void TouchAttribute(bool in_document = true) noexcept {
+    ++revision; ++structure; if (in_document) { ++connected; ++animation; }
+  }
+  void TouchStyle(bool in_document = true, bool affects_animation = true) noexcept {
+    ++revision; if (in_document) { ++connected; if (affects_animation) ++animation; }
+  }
   bool IsComposedConnected(NodeKey key) const {
     const auto found = documents.find(key.document);
     if (found == documents.end() || !found->second->get_node(key.node)) return false;
