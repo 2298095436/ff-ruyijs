@@ -15,6 +15,7 @@
 #include "web_geometry/realm.h"
 #include "jsapi.h"
 #include "js/CharacterEncoding.h"
+#include "js/Conversions.h"
 #include "js/PropertyAndElement.h"
 #include "js/StableStringChars.h"
 #include <array>
