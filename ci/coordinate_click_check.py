@@ -115,9 +115,23 @@ if(type==='mousedown')setTimeout(()=>b.innerHTML='<span id=updated>Completed</sp
         assert report['focusedBeforeHold'] and report['focusedAfterHold'], report
         assert ctx.eval('events') == [
             ['pointerdown', 'original', True], ['mousedown', 'original', True],
-            ['pointerup', 'updated', True], ['mouseup', 'updated', True], ['click', 'b', True],
+            ['pointerup', 'updated', True], ['mouseup', 'updated', True],
         ], ctx.eval('events')
-        print('ok release re-hits a replaced descendant and click uses the common ancestor', flush=True)
+        print('ok release re-hits a replaced descendant; the detached endpoint does not click', flush=True)
+        ctx.eval('''events=[];document.body.innerHTML='<button id=b><span id=down>Down</span><span id=up>Up</span></button>';
+down.style.cssText='position:absolute;left:0;top:0';
+up.style.cssText='position:absolute;left:140px;top:0';
+for(const type of ['pointerdown','mousedown','pointerup','mouseup','click'])
+b.addEventListener(type,e=>events.push([type,e.target.id,e.isTrusted]));
+b.addEventListener('mousedown',()=>setTimeout(()=>{down.style.left='140px';up.style.left='0'},50),{once:true});
+void 0''')
+        report = ctx.click_at(x=30, y=20, hold_ms=100, diagnostics=True)
+        assert report['pressedTargetConnectedAfterHold'] and report['releaseTargetChanged'], report
+        assert ctx.eval('events') == [
+            ['pointerdown', 'down', True], ['mousedown', 'down', True],
+            ['pointerup', 'up', True], ['mouseup', 'up', True], ['click', 'b', True],
+        ], ctx.eval('events')
+        print('ok distinct live down/up targets click their current common ancestor', flush=True)
 
 
 if __name__ == '__main__':

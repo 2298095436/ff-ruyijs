@@ -115,22 +115,29 @@ bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, doub
     if (!JS_WrapObject(cx, &released)) return false;
     if (report) report->releaseTargetChanged = released != target;
     // Screen coordinates keep the same physical point even if the receiving
-    // frame changes while pressed. Click targets the closest common ancestor
-    // of the original down path and the newly painted up path.
+    // frame changes while pressed.
     gScreen.x = (*point)[0] + (*point)[2] - upX;
     gScreen.y = (*point)[1] + (*point)[3] - upY;
-    JS::RootedObjectVector upPath(cx);
-    if (!document_model::ElementPath(cx, released, &upPath)) return false;
-    clicked = nullptr;
-    for (size_t i = path.length(); i > 0; --i) {
-      if (std::find(upPath.begin(), upPath.end(), path[i - 1]) != upPath.end()) {
-        clicked = path[i - 1];
-        break;
-      }
-    }
   }
   if (!Pointer(cx, released, "pointerup", upX, upY, 0, 0, true, clock) ||
       (pointerAllowed && !Mouse(cx, released, "mouseup", upX, upY, 0, 1, true, clock))) return false;
+  if (hitRoot) {
+    // Pointer Events determines click's common ancestor in the current DOM,
+    // after the up handlers. Removing either endpoint suppresses click, but
+    // never prevents pointerup/mouseup from reaching the exposed live target.
+    clicked = nullptr;
+    if (active.document->NodeConnected(target) && active.document->NodeConnected(released)) {
+      JS::RootedObjectVector downPath(cx), upPath(cx);
+      if (!document_model::ElementPath(cx, target, &downPath) ||
+          !document_model::ElementPath(cx, released, &upPath)) return false;
+      for (size_t i = downPath.length(); i > 0; --i) {
+        if (std::find(upPath.begin(), upPath.end(), downPath[i - 1]) != upPath.end()) {
+          clicked = downPath[i - 1];
+          break;
+        }
+      }
+    }
+  }
   if (!clicked) return true;
   document_model::ClickActivation activation(cx);
   if (!document_model::BeginClickActivation(cx, clicked, activation) ||
