@@ -51,9 +51,9 @@ PATCH = [(OLD, NEW)]
 
 def apply(text):
     """`text` (LF line endings) with the edit made; unchanged when already made."""
-    if NEW in text:
+    if text.count(NEW) == 1 and OLD not in text:
         return text
-    if text.count(OLD) != 1:
+    if text.count(OLD) != 1 or NEW in text:
         raise ValueError(f"{TARGET}: the open_socket loop the staggered connect replaces has changed")
     return text.replace(OLD, NEW)
 

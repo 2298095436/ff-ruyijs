@@ -105,10 +105,15 @@ def install_packages(root, build, site):
             text_name = relative.as_posix()
             if text_name in PATCHES:
                 text = content.decode("utf-8").replace("\r\n", "\n")
-                for old, new in PATCHES[text_name]:
-                    if text.count(old) != 1:
-                        raise ValueError(f"Linux patch anchor changed in {text_name}: {old!r}")
-                    text = text.replace(old, new)
+                if text_name == necko_connect_patch.TARGET:
+                    # A new release can pin an archive already carrying this
+                    # common Windows/Linux edit. Validate either known form.
+                    text = necko_connect_patch.apply(text)
+                else:
+                    for old, new in PATCHES[text_name]:
+                        if text.count(old) != 1:
+                            raise ValueError(f"Linux patch anchor changed in {text_name}: {old!r}")
+                        text = text.replace(old, new)
                 content = text.encode("utf-8")
             target = site / relative
             target.parent.mkdir(parents=True, exist_ok=True)

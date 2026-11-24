@@ -20,6 +20,8 @@ jobs:
           python-version: "3.12"
       - name: Byte-compile
         run: python -m compileall -q python/ruyijs ci
+      - name: Helper patch compatibility
+        run: python ci/helper_patch_check.py
       - name: pyflakes
         run: |
           python -m pip install --quiet pyflakes
