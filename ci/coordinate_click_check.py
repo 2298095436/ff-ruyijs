@@ -98,6 +98,29 @@ document.elementFromPoint=()=>{throw Error('page hit test must not run')};messag
               ('cross-origin' if cross_origin else 'srcdoc') + ' closed-shadow frame', flush=True)
 
 
+def replaced_descendant():
+    with Context(timeout=15) as ctx:
+        ctx.configure_clock('logical', epoch_ms=1700000000000)
+        ctx.load_page('https://click.test/replaced', '''<!doctype html><style>
+html,body{margin:0}button{width:120px;height:50px;padding:0;border:0}
+span{display:block;width:120px;height:50px}</style>
+<button id=b><span id=original>Hold</span></button><script>
+window.events=[];for(const type of ['pointerdown','mousedown','pointerup','mouseup','click'])
+b.addEventListener(type,e=>{events.push([type,e.target.id,e.isTrusted]);
+if(type==='mousedown')setTimeout(()=>b.innerHTML='<span id=updated>Completed</span>',50)});
+</script>''')
+        assert ctx.inspect_pointer(x=30, y=20)['id'] == 'original'
+        report = ctx.click_at(x=30, y=20, hold_ms=100, diagnostics=True)
+        assert not report['pressedTargetConnectedAfterHold'] and report['releaseTargetChanged'], report
+        assert report['focusedBeforeHold'] and report['focusedAfterHold'], report
+        assert ctx.eval('events') == [
+            ['pointerdown', 'original', True], ['mousedown', 'original', True],
+            ['pointerup', 'updated', True], ['mouseup', 'updated', True], ['click', 'b', True],
+        ], ctx.eval('events')
+        print('ok release re-hits a replaced descendant and click uses the common ancestor', flush=True)
+
+
 if __name__ == '__main__':
     run(False)
     run(True)
+    replaced_descendant()

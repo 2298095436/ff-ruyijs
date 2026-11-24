@@ -52,6 +52,7 @@ struct ClickReport {
   bool pointerAllowed = true, mouseDelivered = false, mouseAllowed = true;
   bool focusedBeforeHold = false, focusedAfterHold = false, clickAllowed = true;
   double heldMs = 0;
+  bool pressedTargetConnectedAfterHold = true, releaseTargetChanged = false;
 };
 bool FocusInPath(JSContext* cx, BrowsingContext& owner, const JS::RootedObjectVector& path,
                  bool* found) {
@@ -62,7 +63,8 @@ bool FocusInPath(JSContext* cx, BrowsingContext& owner, const JS::RootedObjectVe
 }
 bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, double hold,
            SchedulingControl& clock, const std::array<double, 4>* point = nullptr,
-           ClickReport* report = nullptr) {
+           ClickReport* report = nullptr, TopLevel* hitRoot = nullptr,
+           double viewportX = 0, double viewportY = 0) {
   if (point) { gScreen.x = (*point)[2]; gScreen.y = (*point)[3]; }
   else if (!active.environment->InnerScreenOrigin(&gScreen.x, &gScreen.y)) return false;
   std::array<double, 4> rect{};
@@ -101,15 +103,41 @@ bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, doub
   if (report) {
     report->heldMs = clock.ClockMilliseconds() - holdStarted;
     if (!FocusInPath(cx, active, path, &report->focusedAfterHold)) return false;
+    report->pressedTargetConnectedAfterHold = active.document->NodeConnected(target);
   }
-  if (!Pointer(cx, target, "pointerup", x, y, 0, 0, true, clock) ||
-      (pointerAllowed && !Mouse(cx, target, "mouseup", x, y, 0, 1, true, clock))) return false;
+  JS::RootedObject released(cx, target), clicked(cx, target);
+  double upX = x, upY = y;
+  if (hitRoot) {
+    BrowsingContext* releaseOwner = nullptr;
+    upX = viewportX; upY = viewportY;
+    if (!ResolvePointerTarget(cx, hitRoot->Active(), &upX, &upY, &released, &releaseOwner)) return false;
+    if (!released) return true;
+    if (!JS_WrapObject(cx, &released)) return false;
+    if (report) report->releaseTargetChanged = released != target;
+    // Screen coordinates keep the same physical point even if the receiving
+    // frame changes while pressed. Click targets the closest common ancestor
+    // of the original down path and the newly painted up path.
+    gScreen.x = (*point)[0] + (*point)[2] - upX;
+    gScreen.y = (*point)[1] + (*point)[3] - upY;
+    JS::RootedObjectVector upPath(cx);
+    if (!document_model::ElementPath(cx, released, &upPath)) return false;
+    clicked = nullptr;
+    for (size_t i = path.length(); i > 0; --i) {
+      if (std::find(upPath.begin(), upPath.end(), path[i - 1]) != upPath.end()) {
+        clicked = path[i - 1];
+        break;
+      }
+    }
+  }
+  if (!Pointer(cx, released, "pointerup", upX, upY, 0, 0, true, clock) ||
+      (pointerAllowed && !Mouse(cx, released, "mouseup", upX, upY, 0, 1, true, clock))) return false;
+  if (!clicked) return true;
   document_model::ClickActivation activation(cx);
-  if (!document_model::BeginClickActivation(cx, target, activation) ||
-      !Pointer(cx, target, "click", x, y, 0, 0, true, clock, &clickAllowed) ||
+  if (!document_model::BeginClickActivation(cx, clicked, activation) ||
+      !Pointer(cx, clicked, "click", upX, upY, 0, 0, true, clock, &clickAllowed) ||
       !document_model::EndClickActivation(cx, activation, clickAllowed)) return false;
   if (report) report->clickAllowed = clickAllowed;
-  return !clickAllowed || document_model::Activate(cx, target);
+  return !clickAllowed || document_model::Activate(cx, clicked);
 }
 bool Delay(JSContext* cx, JS::HandleObject request, const char* name, double* value) {
   bool present = false;
@@ -176,7 +204,8 @@ bool UserInputRequest(JSContext* cx, TopLevel& top, JS::HandleObject request,
       const std::array<double, 4> point{x, y, screenX - x, screenY - y};
       ClickReport report;
       const bool diagnostic = JS::ToBoolean(diagnostics);
-      if (!Click(cx, *owner, target, hold, scheduling, &point, diagnostic ? &report : nullptr)) return false;
+      if (!Click(cx, *owner, target, hold, scheduling, &point, diagnostic ? &report : nullptr,
+                 &top, xValue.toNumber(), yValue.toNumber())) return false;
       if (diagnostic) {
         JS::RootedObject object(cx, JS_NewPlainObject(cx));
         const auto boolean = [&](const char* name, bool bit) {
@@ -190,6 +219,8 @@ bool UserInputRequest(JSContext* cx, TopLevel& top, JS::HandleObject request,
             !boolean("mouseDownAllowed", report.mouseAllowed) ||
             !boolean("focusedBeforeHold", report.focusedBeforeHold) ||
             !boolean("focusedAfterHold", report.focusedAfterHold) ||
+            !boolean("pressedTargetConnectedAfterHold", report.pressedTargetConnectedAfterHold) ||
+            !boolean("releaseTargetChanged", report.releaseTargetChanged) ||
             !JS_DefineProperty(cx, object, "heldMs", report.heldMs, JSPROP_ENUMERATE) ||
             !boolean("clickAllowed", report.clickAllowed)) return false;
         result.setObject(*object);
