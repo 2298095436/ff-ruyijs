@@ -242,6 +242,7 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
         std::isfinite(static_x[child]) ? static_x[child] : box.content[0],
         std::isfinite(static_y[child]) ? static_y[child] : box.content[1],
         child_positioned, depth+1)) return false;
+  if (!BoxReplaced(node)) AlignInlineContent(index);
   if (!absolute && index < places.size()) {
     places[index] = {cb[2], cb[3], in_forced_w, in_forced_h, rel_bx, rel_by,
                      collapse_shift, definite_height, parent_bfc, true};

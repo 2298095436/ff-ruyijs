@@ -58,6 +58,22 @@ html,body{margin:0}.line{width:300px;text-align:center}
         print('ok each inline line aligns separately; blocks, logical alignment and overflow', flush=True)
 
 
+def auto_width_check():
+    with Context(timeout=15) as ctx:
+        ctx.load_page('https://alignment.test/', '''<!doctype html><style>
+html,body{margin:0}.line{width:400px;text-align:center}
+#auto,#inner{display:inline-block}#inner{width:80px;height:20px}
+</style><div class=line><span id=auto><span id=inner></span></span></div>
+<div class=line><span id=outer><span id=nested>text</span></span></div>''')
+        near(ctx.eval('auto.getBoundingClientRect().width'), 80)
+        near(ctx.eval('auto.getBoundingClientRect().x'), 160)
+        near(ctx.eval('inner.getBoundingClientRect().x'), 160)
+        boxes = ctx.eval('({outer:outer.getBoundingClientRect().toJSON(),nested:nested.getBoundingClientRect().toJSON()})')
+        near(boxes['outer']['x'], (400 - boxes['outer']['width']) / 2)
+        near(boxes['nested']['x'], boxes['outer']['x'])
+        print('ok shrink-to-fit uses final width and ordinary inline boxes do not align again', flush=True)
+
+
 def positioned_check():
     with Context(timeout=15) as ctx:
         ctx.load_page('https://alignment.test/', '''<!doctype html><style>
@@ -105,5 +121,6 @@ html,body{margin:0}#host{position:fixed;left:40px;top:50px;width:530px;height:50
 if __name__ == '__main__':
     geometry_check()
     line_check()
+    auto_width_check()
     positioned_check()
     frame_check()
