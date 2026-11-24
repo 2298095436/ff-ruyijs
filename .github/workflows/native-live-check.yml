@@ -1,0 +1,62 @@
+name: Native live query (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Successful or diagnostic Linux build run containing the wheel
+        required: true
+        type: string
+      origin:
+        description: Departure airport code
+        default: BOD
+        type: string
+      destination:
+        description: Arrival airport code
+        default: LIS
+        type: string
+      date:
+        description: Departure date (YYYY-MM-DD)
+        default: '2026-12-14'
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  query:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: ruyijs-linux
+          path: wheelhouse
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.build_run_id }}
+      - name: Install selected wheel
+        run: |
+          python -m venv "$RUNNER_TEMP/native-query"
+          "$RUNNER_TEMP/native-query/bin/python" -m pip install --no-index wheelhouse/*.whl
+      - name: Query the real site with native transport
+        env:
+          PROBE_ORIGIN: ${{ inputs.origin }}
+          PROBE_DESTINATION: ${{ inputs.destination }}
+          PROBE_DATE: ${{ inputs.date }}
+        run: |
+          "$RUNNER_TEMP/native-query/bin/python" ci/easyjet_live_check.py \
+            --origin "$PROBE_ORIGIN" --destination "$PROBE_DESTINATION" \
+            --date "$PROBE_DATE" --output evidence/native-live-query.json
+      - name: Retain sanitized live evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-live-query
+          path: evidence/native-live-query.json
+          if-no-files-found: warn
+          retention-days: 14
