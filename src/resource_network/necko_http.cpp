@@ -1,4 +1,5 @@
 #include "resource_network/necko_http.h"
+#include "resource_network/http_error_capture.h"
 #include "resource_network/necko_helper.h"
 #include "resource_network/necko_wire.h"
 #include "runtime/transport_partition.h"
@@ -235,6 +236,7 @@ bool NeckoHttp(const std::string& method, const std::string& url, const HeaderPa
       return false;
     }
     if (read) {
+      CaptureHttpError(method, url, candidate);
       *result = std::move(candidate);
       return true;
     }

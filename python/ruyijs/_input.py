@@ -38,6 +38,22 @@ class InputControl:
         with self._lock:
             return self._request("input", type=event_type, x=x, y=y, init=init)
 
+    def inspect_pointer(self, *, x, y):
+        """Read the native painted target at a viewport point without input.
+
+        Returns its tag, id, role, ancestors, local rect, frame URL/depth and
+        translated client coordinates, or None outside the rendered viewport.
+        This host-only snapshot does not expose a closed shadow root to scripts.
+        """
+        for value in (x, y):
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise TypeError("pointer coordinates must be numbers")
+            if not math.isfinite(value):
+                raise ValueError("pointer coordinates must be finite")
+        self._callbacks.guard()
+        with self._lock:
+            return self._request("input", type="pointermove", x=x, y=y, init={}, inspect=True)
+
     def click(self, target, *, hold_ms=80):
         """Click the element `target` (a JavaScript expression) as a user does.
 

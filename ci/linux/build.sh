@@ -122,6 +122,7 @@ case "$step" in
     "${clean[@]}" "$venv/bin/python" "$root/ci/token_list_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/worker_port_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/net_log_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/http_error_capture_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/http_timeout_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/diagnostics_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/native_funnel_check.py"

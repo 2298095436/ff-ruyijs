@@ -51,6 +51,13 @@ Object.defineProperty(f,k,{get(){throw Error('page getter must not run')}});
 Object.defineProperty(document,'elementFromPoint',{value(){throw Error('page hit test must not run')}});
 return true})()''')
         screen = ctx.eval('({x:mozInnerScreenX,y:mozInnerScreenY})')
+        before = ctx.eval('messages')
+        hit = ctx.inspect_pointer(x=65, y=75)
+        assert hit['tag'] == 'button' and hit['id'] == 'real' and hit['frameDepth'] == 1, hit
+        assert hit['clientX'] == 20 and hit['clientY'] == 20, hit
+        assert hit['rect']['x'] == 10 and hit['rect']['y'] == 12, hit
+        assert ctx.eval('messages') == before
+        assert ctx.inspect_pointer(x=-1, y=-1) is None
         assert ctx.dispatch_pointer('pointerdown', x=65, y=75,
                                     bubbles=True, composed=True, cancelable=True,
                                     pointerId=1, pointerType='mouse', isPrimary=True,
