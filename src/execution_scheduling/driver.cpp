@@ -21,8 +21,17 @@ bool State::AwaitExternal(double until, double step) {
 void Realm::SetExternalWork(const ExternalWork& work) { state_->external = work; }
 bool Realm::RunExternalTask() {
   auto& s = *state_;
+  // A parser-blocking script or stylesheet is part of the current task. The
+  // advance wall budget can yield between tasks, but cannot resume a C++/JS
+  // stack after an unfinished blocking load. Complete this wait under the
+  // transport's own timeout, then let the driver report its elapsed budget.
+  struct FinishBlockingTask {
+    State& state;
+    bool bound;
+    ~FinishBlockingTask() { state.wallBound = bound; }
+  } finish{s, s.wallBound};
+  s.wallBound = false;
   for (;;) {
-    if (s.WallExpired()) return false;
     if (s.RunExternal()) return true;
     if (!s.ExternalPending()) return false;
     s.ExternalReady(1000);

@@ -106,6 +106,7 @@ case "$step" in
     "${clean[@]}" "$venv/bin/python" "$root/ci/fetch_abort_transfer_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/load_timer_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/external_timer_fairness_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/atomic_task_budget_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/coordinate_click_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/timer_scale_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/selection_check.py"
