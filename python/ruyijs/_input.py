@@ -66,7 +66,7 @@ class InputControl:
             raise TypeError("click target must be a string expression")
         return self._user(action="click", target=target, hold_ms=hold_ms)
 
-    def click_at(self, *, x, y, hold_ms=80, diagnostics=False):
+    def click_at(self, *, x, y, hold_ms=80, diagnostics=False, release_on_text=None):
         """Click a native painted target at top-level viewport coordinates.
 
         Enters closed shadow trees and live iframe viewports, then uses the
@@ -75,6 +75,9 @@ class InputControl:
         the point has no rendered target. Page DOM getters cannot choose it.
         diagnostics=True returns the native cancellation, focus and elapsed
         hold report on delivery. It adds no page event listeners or JS reads.
+        release_on_text releases once that text appears in the painted button
+        subtree (or the hit target), within hold_ms. Native task advancement
+        continues normally, sampling original node text every 100 milliseconds.
         """
         for value in (x, y):
             if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -83,7 +86,14 @@ class InputControl:
                 raise ValueError("pointer coordinates must be finite")
         if not isinstance(diagnostics, bool):
             raise TypeError("click diagnostics must be a boolean")
-        return self._user(action="click", x=x, y=y, hold_ms=hold_ms, diagnostics=diagnostics)
+        fields = {"hold_ms": hold_ms, "diagnostics": diagnostics}
+        if release_on_text is not None:
+            if not isinstance(release_on_text, str):
+                raise TypeError("release text must be a string")
+            if not release_on_text or len(release_on_text) > 512:
+                raise ValueError("release text must contain 1 to 512 characters")
+            fields["release_on_text"] = release_on_text
+        return self._user(action="click", x=x, y=y, **fields)
 
     def type(self, text, *, target=None, interval_ms=60):
         """Type `text` into the focused element (or focus `target` first).

@@ -11,6 +11,7 @@
 #include "runtime/scheduling_control.h"
 #include "runtime/top_level.h"
 #include "document_model/realm.h"
+#include "document_model/geometry_source.h"
 #include "interaction/realm.h"
 #include "web_geometry/realm.h"
 #include "jsapi.h"
@@ -53,6 +54,7 @@ struct ClickReport {
   bool focusedBeforeHold = false, focusedAfterHold = false, clickAllowed = true;
   double heldMs = 0;
   bool pressedTargetConnectedAfterHold = true, releaseTargetChanged = false;
+  bool releasedOnText = false;
 };
 bool FocusInPath(JSContext* cx, BrowsingContext& owner, const JS::RootedObjectVector& path,
                  bool* found) {
@@ -64,7 +66,8 @@ bool FocusInPath(JSContext* cx, BrowsingContext& owner, const JS::RootedObjectVe
 bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, double hold,
            SchedulingControl& clock, const std::array<double, 4>* point = nullptr,
            ClickReport* report = nullptr, TopLevel* hitRoot = nullptr,
-           double viewportX = 0, double viewportY = 0) {
+           double viewportX = 0, double viewportY = 0,
+           const std::u16string* releaseText = nullptr) {
   if (point) { gScreen.x = (*point)[2]; gScreen.y = (*point)[3]; }
   else if (!active.environment->InnerScreenOrigin(&gScreen.x, &gScreen.y)) return false;
   std::array<double, 4> rect{};
@@ -99,7 +102,33 @@ bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, doub
     report->mouseAllowed = mouseAllowed;
     if (!FocusInPath(cx, active, path, &report->focusedBeforeHold)) return false;
   }
-  clock.Pass(hold);
+  if (releaseText && !releaseText->empty()) {
+    JS::RootedObject textTarget(cx, target), parent(cx);
+    for (size_t i = path.length(); i > 0; --i) {
+      document_model::GeometryNode node;
+      JS::RootedObjectVector children(cx);
+      JS::RootedValue value(cx, JS::ObjectValue(*path[i - 1]));
+      if (!active.document->ReadGeometryNode(value, &node, &parent, &children)) return false;
+      const bool button = node.localName == u"button" ||
+          std::any_of(node.attributes.begin(), node.attributes.end(), [](const auto& attr) {
+            return attr.name == u"role" && attr.value == u"button";
+          });
+      if (button) { textTarget = path[i - 1]; break; }
+    }
+    const double until = holdStarted + hold;
+    for (;;) {
+      document_model::DomString text;
+      JS::RootedValue value(cx, JS::ObjectValue(*textTarget));
+      if (!active.document->ReadNodeText(value, &text, 4096)) return false;
+      if (text.find(*releaseText) != std::u16string::npos) {
+        if (report) report->releasedOnText = true;
+        break;
+      }
+      const double remaining = until - clock.ClockMilliseconds();
+      if (remaining <= 0) break;
+      clock.Pass(std::min(100.0, remaining));
+    }
+  } else clock.Pass(hold);
   if (report) {
     report->heldMs = clock.ClockMilliseconds() - holdStarted;
     if (!FocusInPath(cx, active, path, &report->focusedAfterHold)) return false;
@@ -167,12 +196,14 @@ bool UserInputRequest(JSContext* cx, TopLevel& top, JS::HandleObject request,
   std::string action, text, key, expression;
   double hold = 80, interval = 60;
   bool hasTarget = false, hasX = false, hasY = false;
-  JS::RootedValue diagnostics(cx);
-  if (!resource_wire::Fields(cx, request, {"id", "op", "action", "target", "x", "y", "text", "key", "hold_ms", "interval_ms", "diagnostics"}) ||
+  JS::RootedValue diagnostics(cx), releaseValue(cx);
+  std::u16string releaseText;
+  if (!resource_wire::Fields(cx, request, {"id", "op", "action", "target", "x", "y", "text", "key", "hold_ms", "interval_ms", "diagnostics", "release_on_text"}) ||
       !resource_wire::Property(cx, request, "action", &action, 16, resource_wire::TextKind::ASCII) ||
       !JS_HasProperty(cx, request, "target", &hasTarget) ||
       !JS_HasProperty(cx, request, "x", &hasX) || !JS_HasProperty(cx, request, "y", &hasY) ||
       !JS_GetProperty(cx, request, "diagnostics", &diagnostics) ||
+      !JS_GetProperty(cx, request, "release_on_text", &releaseValue) ||
       (hasTarget && !resource_wire::Property(cx, request, "target", &expression, 65536)) ||
       !Delay(cx, request, "hold_ms", &hold) || !Delay(cx, request, "interval_ms", &interval)) return false;
   if ((hasX || hasY) && (action != "click" || hasTarget || !hasX || !hasY))
@@ -180,6 +211,16 @@ bool UserInputRequest(JSContext* cx, TopLevel& top, JS::HandleObject request,
   if ((!diagnostics.isUndefined() && !diagnostics.isBoolean()) ||
       (JS::ToBoolean(diagnostics) && !(action == "click" && hasX && hasY)))
     return resource_wire::Error(cx, "Click diagnostics require coordinates and a boolean flag");
+  if (!releaseValue.isUndefined()) {
+    if (!releaseValue.isString() || action != "click" || !hasX || !hasY)
+      return resource_wire::Error(cx, "Text-conditioned release requires a coordinate click and string");
+    JS::RootedString text(cx, releaseValue.toString());
+    JS::AutoStableStringChars chars(cx);
+    if (!chars.initTwoByte(cx, text)) return false;
+    if (chars.length() == 0 || chars.length() > 512)
+      return resource_wire::Error(cx, "Release text must contain 1 to 512 UTF-16 units", true);
+    releaseText.assign(chars.twoByteChars(), chars.length());
+  }
   BrowsingContext& active = top.Active();
   JSAutoRealm realm(cx, active.page);
   JS::RootedObject target(cx);
@@ -212,7 +253,7 @@ bool UserInputRequest(JSContext* cx, TopLevel& top, JS::HandleObject request,
       ClickReport report;
       const bool diagnostic = JS::ToBoolean(diagnostics);
       if (!Click(cx, *owner, target, hold, scheduling, &point, diagnostic ? &report : nullptr,
-                 &top, xValue.toNumber(), yValue.toNumber())) return false;
+                 &top, xValue.toNumber(), yValue.toNumber(), &releaseText)) return false;
       if (diagnostic) {
         JS::RootedObject object(cx, JS_NewPlainObject(cx));
         const auto boolean = [&](const char* name, bool bit) {
@@ -228,6 +269,7 @@ bool UserInputRequest(JSContext* cx, TopLevel& top, JS::HandleObject request,
             !boolean("focusedAfterHold", report.focusedAfterHold) ||
             !boolean("pressedTargetConnectedAfterHold", report.pressedTargetConnectedAfterHold) ||
             !boolean("releaseTargetChanged", report.releaseTargetChanged) ||
+            !boolean("releasedOnText", report.releasedOnText) ||
             !JS_DefineProperty(cx, object, "heldMs", report.heldMs, JSPROP_ENUMERATE) ||
             !boolean("clickAllowed", report.clickAllowed)) return false;
         result.setObject(*object);

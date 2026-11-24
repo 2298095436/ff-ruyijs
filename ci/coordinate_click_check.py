@@ -110,7 +110,8 @@ b.addEventListener(type,e=>{events.push([type,e.target.id,e.isTrusted]);
 if(type==='mousedown')setTimeout(()=>b.innerHTML='<span id=updated>Completed</span>',50)});
 </script>''')
         assert ctx.inspect_pointer(x=30, y=20)['id'] == 'original'
-        report = ctx.click_at(x=30, y=20, hold_ms=100, diagnostics=True)
+        report = ctx.click_at(x=30, y=20, hold_ms=1000, release_on_text='Completed', diagnostics=True)
+        assert report['releasedOnText'] and 50 <= report['heldMs'] < 1000, report
         assert not report['pressedTargetConnectedAfterHold'] and report['releaseTargetChanged'], report
         assert report['focusedBeforeHold'] and report['focusedAfterHold'], report
         assert ctx.eval('events') == [
@@ -125,8 +126,9 @@ for(const type of ['pointerdown','mousedown','pointerup','mouseup','click'])
 b.addEventListener(type,e=>events.push([type,e.target.id,e.isTrusted]));
 b.addEventListener('mousedown',()=>setTimeout(()=>{down.style.left='140px';up.style.left='0'},50),{once:true});
 void 0''')
-        report = ctx.click_at(x=30, y=20, hold_ms=100, diagnostics=True)
+        report = ctx.click_at(x=30, y=20, hold_ms=100, release_on_text='Never seen', diagnostics=True)
         assert report['pressedTargetConnectedAfterHold'] and report['releaseTargetChanged'], report
+        assert not report['releasedOnText'], report
         assert ctx.eval('events') == [
             ['pointerdown', 'down', True], ['mousedown', 'down', True],
             ['pointerup', 'up', True], ['mouseup', 'up', True], ['click', 'b', True],
