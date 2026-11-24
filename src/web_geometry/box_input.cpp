@@ -48,10 +48,10 @@ bool BoxSameStyle(const box::BoxStyle& a, const box::BoxStyle& b) {
 bool BoxSameLayout(const box::BoxStyle& a, const box::BoxStyle& b) {
   static constexpr const char* kExtraLayoutProps[] = {
       "-x-lang", "align-content", "align-items", "align-self", "aspect-ratio", "column-gap", "flex-basis",
-      "flex-direction", "flex-grow", "flex-shrink", "flex-wrap", "font-family", "font-style",
+      "direction", "flex-direction", "flex-grow", "flex-shrink", "flex-wrap", "font-family", "font-style",
       "font-weight", "grid-auto-rows", "grid-column", "grid-column-end", "grid-column-start",
       "grid-row", "grid-row-end", "grid-row-start", "grid-template-columns", "grid-template-rows",
-      "justify-content", "line-height", "order", "overflow", "row-gap", "transform-origin",
+      "justify-content", "line-height", "order", "overflow", "row-gap", "text-align", "transform-origin",
       "white-space",
   };
   if (a.font_size != b.font_size || a.root_font_size != b.root_font_size ||
