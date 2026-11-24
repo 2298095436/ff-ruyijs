@@ -104,6 +104,8 @@ class Realm {
   // Fires the trusted ErrorEvent used by parser/module failures.  The
   // exception value is retained as ErrorEvent.error and the textual fields
   // are supplied by the runtime's exception adapter.
+  bool FireAnimation(JS::HandleObject target, const char* type, const std::string& name,
+                     double elapsed, double time_ms);
   bool FireError(JS::HandleObject target, JS::HandleValue error,
                  const char* message, const char* filename,
                  int32_t line = 0, int32_t column = 0,

@@ -201,6 +201,8 @@ class Realm final {
   int AnimationNodeKind(JS::HandleValue node);
   bool AnimationNodeDocument(JS::HandleObject node, JS::MutableHandleObject document);
   bool AnimationInScope(JS::HandleObject root, JS::HandleObject node, bool subtree, bool* result);
+  uint64_t AnimationRevision();
+  bool AnimationElements(JS::MutableHandleObjectVector);
   bool CheckElementReceiver(JS::HandleValue);
   bool IsElementValue(JS::HandleValue, bool* result);  // non-throwing brand check
   JSObject* svgPrototype(bool text);

@@ -126,6 +126,7 @@ case "$step" in
     "${clean[@]}" "$venv/bin/python" "$root/ci/diagnostics_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/native_funnel_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/document_stream_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/css_animation_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/pointer_hit_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/wall_budget_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/connect_fallback_check.py"

@@ -116,6 +116,20 @@ bool Realm::FireTaskPriority(JS::HandleObject target,JS::HandleObject prototype,
    FireRuntimeEvent(s,target,"TaskPriorityChangeEvent","prioritychange",Iface::TaskPriority,Kind::TaskPriority,init,prototype,time_ms);
 }
 
+bool Realm::FireAnimation(JS::HandleObject target, const char* type, const std::string& name,
+                          double elapsed, double time_ms) {
+  State& s = *state_;
+  JSContext* cx = s.cx;
+  JSAutoRealm realm(cx, s.page);
+  JS::RootedObject init(cx, JS_NewPlainObject(cx));
+  JS::RootedString text(cx, JS_NewStringCopyN(cx, name.data(), name.size()));
+  return init && text && JS_DefineProperty(cx, init, "animationName", text, JSPROP_ENUMERATE) &&
+      JS_DefineProperty(cx, init, "elapsedTime", elapsed, JSPROP_ENUMERATE) &&
+      JS_DefineProperty(cx, init, "pseudoElement", "", JSPROP_ENUMERATE) &&
+      JS_DefineProperty(cx, init, "bubbles", true, JSPROP_ENUMERATE) &&
+      FireRuntimeEvent(s, target, "AnimationEvent", type, Iface::Animation, Kind::Animation, init,
+                       JS::NullHandleObject, time_ms);
+}
 bool Realm::FireError(JS::HandleObject target, JS::HandleValue error,
                      const char* message, const char* filename,
                      int32_t line, int32_t column, bool* allowed) {

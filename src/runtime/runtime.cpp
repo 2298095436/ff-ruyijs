@@ -461,6 +461,16 @@ bool RunSession(JSContext* cx, const SessionOptions& session, js::cli::OptionPar
   } topLevelBinding{{*scheduling, pageLoad, monitor, *frames}, *top};
   top->SetDocumentPort(&BindTopLevelDocument, &topLevelBinding.owners);
   top->SetRetirePort(&RetireTopLevelDocument, &topLevelBinding.owners);
+  struct AnimationRenderBinding {
+    execution_scheduling::Realm& scheduling;
+    TopLevel& top;
+    Frames& frames;
+    ~AnimationRenderBinding() { scheduling.SetRenderPort(nullptr, nullptr); }
+  } animationRendering{*scheduling, *top, *frames};
+  scheduling->SetRenderPort([](void* raw) {
+    auto& binding = *static_cast<AnimationRenderBinding*>(raw);
+    return binding.frames.SampleAnimations(binding.top.Active());
+  }, &animationRendering);
   if (!session.rpc.empty())
     return Serve(cx, *top, codec, session.rpc.c_str(), checkpoint, errors, control,
                  schedulingControl, resourceControl, consoleControl, pageLoad, monitor);

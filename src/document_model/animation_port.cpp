@@ -55,4 +55,19 @@ bool Realm::AnimationInScope(JS::HandleObject root, JS::HandleObject object, boo
   if (!subtree) { *result = Same(r->key, n->key); return true; }
   return owner.Check(owner.model.Contains(r->key, n->key, result));
 }
+uint64_t Realm::AnimationRevision() { return state_->model.ConnectedRevision(); }
+bool Realm::AnimationElements(JS::MutableHandleObjectVector out) {
+  State& state = *state_;
+  std::vector<NodeKey> nodes;
+  if (!state.Check(state.model.Subtree(state.main, &nodes))) return false;
+  out.clear();
+  for (NodeKey key : nodes) {
+    NodeSnapshot node;
+    if (!state.Check(state.model.Inspect(key, &node))) return false;
+    if (node.kind != NodeKind::Element) continue;
+    JS::RootedObject object(state.cx);
+    if (!WrapNode(key, &object) || !out.append(object)) return false;
+  }
+  return true;
+}
 }  // namespace ruyijs::document_model

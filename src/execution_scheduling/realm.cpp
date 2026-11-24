@@ -137,6 +137,17 @@ bool Realm::InstallInto(JSContext* cx, JS::HandleObject global, PageHelpers& hel
          s.DefineOn(ClearFrame, "cancelAnimationFrame", 1, 0, global, helpers) &&
          InstallPerformance(s, global, helpers, events) && InstallIdle(s,global,helpers);
 }
+void Realm::SetRenderPort(bool (*port)(void*), void* context) {
+  state_->render = port; state_->renderContext = context;
+}
+bool Realm::Render() {
+  State& s = *state_;
+  if (!s.render || s.rendering || JS_IsExceptionPending(s.cx)) return true;
+  s.rendering = true;
+  const bool ok = s.render(s.renderContext);
+  s.rendering = false;
+  return ok;
+}
 void Realm::BeginRequest() { state_->microEnqueued = state_->microExecuted = 0; }
 void Realm::Freeze() { state_->frozen = true; }
 bool Realm::Configure(bool logical, double epoch) {

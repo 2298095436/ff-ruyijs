@@ -6,8 +6,8 @@
 
 namespace ruyijs::web_animation {
 bool NewAnimation(State& s, JS::HandleObject proto, JS::HandleObject effect, JS::HandleObject timeline,
-                  JS::MutableHandleObject a) {
-  a.set(s.kit.New(&kAnimationClass, proto));
+                  JS::MutableHandleObject a, bool css) {
+  a.set(s.kit.New(css ? &kCssAnimationClass : &kAnimationClass, proto));
   if (!a || !s.events.Attach(a)) return false;
   JS::SetReservedSlot(a, kAOwner, JS::PrivateValue(&s));
   JS::SetReservedSlot(a, kAId, JS::StringValue(JS_GetEmptyString(s.cx)));
@@ -21,6 +21,12 @@ bool NewAnimation(State& s, JS::HandleObject proto, JS::HandleObject effect, JS:
   SetFlag(a, kAPendingPause, false);
   JS::SetReservedSlot(a, kAReplace, JS::Int32Value(0));
   JS::SetReservedSlot(a, kASequence, JS::Int32Value(s.sequence++));
+  JS::SetReservedSlot(a, kACssName, JS::NullValue());
+  JS::SetReservedSlot(a, kACssStarted, JS::BooleanValue(false));
+  JS::SetReservedSlot(a, kACssEnded, JS::BooleanValue(false));
+  JS::SetReservedSlot(a, kACssIteration, JS::DoubleValue(0));
+  JS::SetReservedSlot(a, kACssTask, JS::NullValue());
+  JS::SetReservedSlot(a, kACssPaused, JS::BooleanValue(false));
   return NewReady(s, a, true) && NewFinished(s, a) && SetEffect(s, a, effect);
 }
 

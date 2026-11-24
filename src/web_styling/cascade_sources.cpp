@@ -1,5 +1,6 @@
 // Resolve original scope, use its Styling factory/cache and original cascade.
 #include "web_styling/adopted.h"
+#include "web_styling/realm.h"
 #include "web_styling/condition_environment.h"
 #include "web_styling/computed_source.h"
 #include "domain/styling/stylesheet.h"
@@ -97,6 +98,25 @@ void EnsureSheetDigest(const State& state, SheetCache& cache) {
 }
 }  // namespace
 
+uint64_t Realm::AnimationRevision() const { return state_->cssomGeneration; }
+bool Realm::CssKeyframeNames(JS::HandleObject element, std::vector<std::string>* out) {
+  using namespace ruyijs::domain::styling;
+  out->clear();
+  CssMediaEnvironment env;
+  if (!ReadConditionEnvironment(*state_, &env)) return false;
+  auto visit = [&](auto&& self, const std::vector<std::shared_ptr<CssomRuleValue>>& rows) -> void {
+    for (const auto& row : rows) {
+      if (row->kind == 7) { out->push_back(row->selector); continue; }
+      if (row->kind == 4 && !CssMediaCondition(row->media.text(), env)) continue;
+      if (row->kind == 12 && !CssSupportsCondition(row->condition)) continue;
+      self(self, row->children);
+    }
+  };
+  return VisitCascadeSheets(*state_, element, [&](State&, SheetCache& cache) {
+    if (!cache.disabled && CssMediaCondition(cache.media.text(), env)) visit(visit, cache.rules);
+    return true;
+  });
+}
 // Building the aggregates parses every selector and declaration of the scope's
 // sheets, and a layout read builds them once per read: a page that measures an
 // element after each inline-style change (font probes) re-parsed every sheet

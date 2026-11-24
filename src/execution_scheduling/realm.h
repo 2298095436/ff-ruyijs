@@ -80,6 +80,8 @@ class Realm final {
   // One microtask checkpoint on this agent's job queue (exceptions reported).
   void PerformMicrotaskCheckpoint();
   void BeginRequest();
+  void SetRenderPort(bool (*port)(void*), void* context);
+  bool Render();
   void Freeze();
   bool Configure(bool logical, double epoch);
   Snapshot Inspect();

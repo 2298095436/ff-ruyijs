@@ -15,7 +15,7 @@ namespace model = ::ruyijs::domain::animation;
 enum AnimationSlot : uint32_t {
   kAOwner = 0, kAId, kAEffect, kATimeline, kAStart, kAHold, kARate, kAPendingRate,
   kAPendingPlay, kAPendingPause, kAPendingTask, kATimerTask, kAReady, kAFinished,
-  kAReplace, kASequence, kAPrevious, kAOnFinish, kAOnCancel, kAOnRemove, kACount
+  kAReplace, kASequence, kAPrevious, kAOnFinish, kAOnCancel, kAOnRemove, kACssName, kACssStarted, kACssEnded, kACssIteration, kACssTask, kACssPaused, kACount
 };
 enum EffectSlot : uint32_t {
   kEOwner = 0, kETarget, kEPseudo, kEComposite, kEIterComposite, kEDelay, kEEndDelay,
@@ -44,6 +44,11 @@ struct State {
   std::optional<double> tick;
   Realm::DocumentPorts dom;
   Realm::SchedulingPorts scheduling;
+  Realm::CssPorts css;
+  uint64_t cssRevision = 0;
+  bool samplingCss = false;
+  JS::PersistentRootedObject cssAnimations;  // JS array keeps native records traced
+
 };
 State& OwnerOf(JSObject* object);
 bool IsAnimation(JSObject* object);  // Animation, CSSAnimation or CSSTransition
@@ -89,7 +94,7 @@ std::optional<double> CurrentTime(JSObject* animation);
 model::ComputedTiming AnimationTiming(JSObject* animation);
 const char* PlayState(JSObject* animation);
 bool NewAnimation(State& s, JS::HandleObject proto, JS::HandleObject effect,
-                  JS::HandleObject timeline, JS::MutableHandleObject animation);
+                  JS::HandleObject timeline, JS::MutableHandleObject animation, bool css = false);
 bool SetEffect(State& s, JS::HandleObject animation, JS::HandleObject effect);
 bool Play(State& s, JS::HandleObject animation, bool autoRewind, const char* prefix);
 bool Pause(State& s, JS::HandleObject animation, const char* prefix);
@@ -102,6 +107,8 @@ bool SetPlaybackRate(State& s, JS::HandleObject animation, double rate);
 bool UpdatePlaybackRate(State& s, JS::HandleObject animation, double rate);
 bool UpdateFinished(State& s, JS::HandleObject animation, bool didSeek, bool sync);
 bool AnimationsFor(State& s, JS::HandleObject root, bool subtree, JS::MutableHandleValue result);
+bool SampleCss(State&);
+bool UpdateCssEvents(State&, JS::HandleObject, bool cancel = false);
 bool InstallAnimations(State& s);
 bool InstallElementMembers(State& s, JS::HandleObject elementPrototype);
 }  // namespace ruyijs::web_animation

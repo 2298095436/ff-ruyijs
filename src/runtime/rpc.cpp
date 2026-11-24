@@ -177,6 +177,10 @@ bool Serve(JSContext* cx, TopLevel& top,
       success = false;
       if (!Failure(cx, &value)) return false;
     }
+    if (success && !closing && !scheduling.Render()) {
+      success = false;
+      if (!Failure(cx, &value)) return false;
+    }
     if (!Reply(cx, codec, id, success, &value, checkpoint, errors, &frame, &success)) return false;
     hostValues.Finish(success);
     if (!pipe.Write(frame) || closing) return true;

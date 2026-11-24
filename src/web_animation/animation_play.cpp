@@ -128,6 +128,7 @@ bool Finish(State& s, JS::HandleObject a) {
 }
 
 bool Cancel(State& s, JS::HandleObject a) {
+  if (!UpdateCssEvents(s, a, true)) return false;
   if (std::strcmp(PlayState(a), "idle")) {
     if (Pending(a)) {
       CancelTask(a);

@@ -202,6 +202,7 @@ class Frames final {
   void ConsumeHistoryActivation(BrowsingContext& source);
   void UnbindActivation();
   void UnbindResourceCallbacks();
+  bool SampleAnimations(BrowsingContext& top);
   bool LoadEventsPending(const BrowsingContext& parent,
                          bool (*pending)(void*, JS::HandleObject), void* context) const;
   // Runtime frame-lifecycle ports (document_model::FrameCreate/FrameDiscard).

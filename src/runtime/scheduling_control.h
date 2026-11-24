@@ -11,6 +11,7 @@ class SchedulingControl final {
       : cx_(cx), owner_(owner), environment_(environment) {}
   void BeginRequest() { owner_.BeginRequest(); }
   void Freeze() { owner_.Freeze(); }
+  bool Render() { return owner_.Render(); }
   double ClockMilliseconds() { return owner_.ClockSeconds() * 1000.0; }
   // Lets `ms` of the selected clock pass with the event loop running, as the
   // time between a user's input steps does (runtime/user_input.cpp).

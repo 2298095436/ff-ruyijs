@@ -24,6 +24,7 @@ bool Track(State& s, JSObject* a) {
 
 bool AnimationsFor(State& s, JS::HandleObject root, bool subtree, JS::MutableHandleValue result) {
   JSContext* cx = s.cx;
+  if (!SampleCss(s)) return false;
   JS::RootedVector<JSObject*> found(cx);
   auto& list = s.relevant.get();
   for (size_t i = 0; i < list.length();) {

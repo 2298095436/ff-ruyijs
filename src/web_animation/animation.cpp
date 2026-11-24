@@ -172,7 +172,8 @@ bool CssName(JSContext* cx, unsigned argc, JS::Value* vp) {
   if (!self || JS::GetClass(self) != (animation ? &kCssAnimationClass : &kCssTransitionClass))
     return NotImplemented(cx, animation ? "get animationName" : "get transitionProperty",
                           animation ? "CSSAnimation" : "CSSTransition");
-  args.rval().setString(JS_GetEmptyString(cx));  // No CSS-created instance exists (recorded deviation).
+  const auto name = JS::GetReservedSlot(self, kACssName);
+  args.rval().set(name.isString() ? name : JS::StringValue(JS_GetEmptyString(cx)));
   return true;
 }
 }  // namespace

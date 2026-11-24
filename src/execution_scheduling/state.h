@@ -58,6 +58,9 @@ struct State {
   JS::PersistentRootedObjectVector schedulerFactories,performanceObjects;
   uint64_t runningWebTask = 0;
   Checkpoint checkpoint;
+  bool (*render)(void*) = nullptr;
+  void* renderContext = nullptr;
+  bool rendering = false;
   Model model;
   PageHelpers* helpers = nullptr;
   Exposure exposure = Exposure::Window;

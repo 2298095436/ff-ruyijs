@@ -1,6 +1,7 @@
 #include "runtime/secure_exposure.h"
 #include "runtime/user_activation_ports.h"
 #include "runtime/browsing_context.h"
+#include "runtime/css_animation_ports.h"
 #include "execution_scheduling/realm.h"
 #include "web_styling/computed_source.h"
 #include "document_model/exception.h"
@@ -145,6 +146,7 @@ BrowsingContext::~BrowsingContext() {
   if (animation) {
     animation->SetSchedulingPorts({});
     animation->SetDocumentPorts({});
+    animation->SetCssPorts({});
   }
   if (canvas) {
     if (document) document->SetCanvasDimensionPort(nullptr, nullptr);
@@ -604,6 +606,7 @@ bool BrowsingContext::Finish(Frames& owner) {
   JS::RootedObject animationDocument(cx, document->animationDocumentPrototype());
   JS::RootedObject animationElement(cx, document->elementPrototype());
   if (!animation->Install(animationDocument, animationElement)) return false;
+  BindCssAnimationPorts(*this);
   serviceWorker = std::make_unique<web_service_worker::Realm>(cx, page, *helpers, *interaction, *environment,
       origin ? origin->serviceWorker.get() : nullptr);
   if (!serviceWorker->Install()) return false;
@@ -692,6 +695,12 @@ bool Frames::Live(const BrowsingContext& context) const {
   for (const auto& child : children_)
     if (child.get() == &context) return true;
   return false;
+}
+bool Frames::SampleAnimations(BrowsingContext& top) {
+  if (top.animation && !top.animation->SampleCss()) return false;
+  for (const auto& child : children_)
+    if (DescendsFrom(child.get(), &top) && child->animation && !child->animation->SampleCss()) return false;
+  return true;
 }
 bool Frames::LoadEventsPending(const BrowsingContext& parent,
                                bool (*pending)(void*, JS::HandleObject), void* context) const {

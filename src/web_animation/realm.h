@@ -1,6 +1,9 @@
 #ifndef RUYIJS_WEB_ANIMATION_REALM_H
 #define RUYIJS_WEB_ANIMATION_REALM_H
 #include <memory>
+#include <vector>
+#include <string>
+#include "domain/animation/timing.h"
 #include "js/RootingAPI.h"
 #include "js/TypeDecls.h"
 
@@ -8,6 +11,12 @@ namespace ruyijs { class PageHelpers; }
 namespace ruyijs::interaction { class Realm; }
 namespace ruyijs::web_animation {
 struct State;
+struct CssAnimationInput {
+  size_t target = 0;
+  std::string name;
+  domain::animation::EffectTiming timing;
+  bool paused = false;
+};
 // Web Animations for one Window realm (docs/owners/WEB_ANIMATION.md):
 // AnimationTimeline, DocumentTimeline, AnimationEffect, KeyframeEffect,
 // Animation, CSSAnimation, CSSTransition, Document.timeline/getAnimations and
@@ -39,6 +48,13 @@ class Realm final {
     void* context = nullptr;
   };
   void SetSchedulingPorts(const SchedulingPorts& ports);
+  struct CssPorts {
+    uint64_t (*revision)(void*) = nullptr;
+    bool (*read)(void*, JS::MutableHandleObjectVector, std::vector<CssAnimationInput>*) = nullptr;
+    void* context = nullptr;
+  };
+  void SetCssPorts(const CssPorts&);
+  bool SampleCss();
   // Installs the interfaces and the four members on the Document Model's
   // Document and Element prototypes.
   bool Install(JS::HandleObject documentPrototype, JS::HandleObject elementPrototype);

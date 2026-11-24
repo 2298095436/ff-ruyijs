@@ -18,7 +18,7 @@ const char* const kHandlerNames[3] = {"finish", "cancel", "remove"};
 State::State(JSContext* c, JS::HandleObject page, PageHelpers& helpers, interaction::Realm& e)
     : cx(c), kit(c, page, helpers, this), events(e), timeline(c), documentTimeline(c), effect(c),
       keyframeEffect(c), animation(c), cssAnimation(c), cssTransition(c), timelines(c),
-      playbackEvent(c), domException(c), relevant(c) {}
+      playbackEvent(c), domException(c), relevant(c), cssAnimations(c) {}
 
 State& OwnerOf(JSObject* object) {
   return *static_cast<State*>(JS::GetReservedSlot(object, 0).toPrivate());
@@ -81,6 +81,8 @@ Realm::Realm(JSContext* cx, JS::HandleObject page, PageHelpers& helpers, interac
     : state_(std::make_unique<State>(cx, page, helpers, events)) {}
 Realm::~Realm() = default;
 void Realm::SetDocumentPorts(const DocumentPorts& ports) { state_->dom = ports; }
+void Realm::SetCssPorts(const CssPorts& ports) { state_->css = ports; state_->cssRevision = 0; }
+bool Realm::SampleCss() { return web_animation::SampleCss(*state_); }
 void Realm::SetSchedulingPorts(const SchedulingPorts& ports) { state_->scheduling = ports; state_->tick.reset(); }
 
 bool Realm::Install(JS::HandleObject documentPrototype, JS::HandleObject elementPrototype) {

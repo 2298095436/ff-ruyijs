@@ -12,6 +12,11 @@
 namespace ruyijs::execution_scheduling {
 void State::CheckpointJobs() {
   checkpoint(cx);
+  if (!JS_IsExceptionPending(cx) && render && !rendering) {
+    rendering = true;
+    render(renderContext);
+    rendering = false;
+  }
   if (JS_IsExceptionPending(cx)) {
     CaptureOperationFailure(cx);
     JS_ClearPendingException(cx);

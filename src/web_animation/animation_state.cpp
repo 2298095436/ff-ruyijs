@@ -170,6 +170,7 @@ bool UpdateFinished(State& s, JS::HandleObject a, bool didSeek, bool sync) {
   }
   SetOpt(a, kAPrevious, CurrentTime(a));
   const char* state = PlayState(a);
+  if (!UpdateCssEvents(s, a)) return false;
   JS::RootedObject finished(s.cx, &JS::GetReservedSlot(a, kAFinished).toObject());
   const bool settled = JS::GetPromiseState(finished) != JS::PromiseState::Pending;
   if (!std::strcmp(state, "finished") && !settled) {
