@@ -11,17 +11,17 @@ width:20px;height:30px;margin:0}
 </style><button id=real type=button>hold</button><input type=checkbox id=check>
 <script>
 const b=document.getElementById('real'),box=document.getElementById('check');
-let mode='',held=false,task;
-addEventListener('message',e=>{mode=e.data;held=false;b.blur()});
+let held=false,task;
 for(const type of ['pointerdown','mousedown','focus','pointerup','mouseup','click'])
 b.addEventListener(type,e=>{
+  const mode=document.body.getAttribute('data-mode')||'';
   if((mode==='pointer'&&type==='pointerdown')||(mode==='mouse'&&type==='mousedown'))e.preventDefault();
   if(type==='mousedown'){held=false;task=setTimeout(()=>held=true,200)}
   if(type==='mouseup')clearTimeout(task);
   parent.postMessage({type,focused:document.activeElement===b,held,trusted:e.isTrusted,
     view:e.view===window,x:e.clientX,y:e.clientY,sx:e.screenX,sy:e.screenY},'*');
 });
-box.addEventListener('click',e=>{if(mode==='cancelClick')e.preventDefault()});
+box.addEventListener('click',e=>{if(document.body.getAttribute('data-mode')==='cancelClick')e.preventDefault()});
 parent.postMessage({type:'ready'},'*');
 </script>'''
 
@@ -63,8 +63,8 @@ document.elementFromPoint=()=>{throw Error('page hit test must not run')};messag
 
         for mode, expected in [('pointer', ['pointerdown', 'pointerup', 'click']),
                                ('mouse', ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'])]:
-            ctx.eval('fixtureWindow.postMessage(' + json.dumps(mode) + ",'*');void 0")
-            settle(ctx)
+            ctx.eval('fixtureWindow.document.body.setAttribute("data-mode",' + json.dumps(mode) +
+                     ');fixtureWindow.document.getElementById("real").blur();void 0')
             ctx.eval('messages=[];void 0')
             assert ctx.click_at(x=65, y=75, hold_ms=300)
             settle(ctx)
@@ -72,12 +72,10 @@ document.elementFromPoint=()=>{throw Error('page hit test must not run')};messag
             assert [r['type'] for r in rows] == expected, rows
             assert not any(r['focused'] for r in rows), rows
 
-        ctx.eval("fixtureWindow.postMessage('cancelClick','*');void 0")
-        settle(ctx)
+        ctx.eval("fixtureWindow.document.body.setAttribute('data-mode','cancelClick');void 0")
         assert ctx.click_at(x=150, y=75, hold_ms=0)
         assert ctx.eval("fixtureWindow.document.getElementById('check').checked") is False
-        ctx.eval("fixtureWindow.postMessage('','*');void 0")
-        settle(ctx)
+        ctx.eval("fixtureWindow.document.body.removeAttribute('data-mode');void 0")
         assert ctx.click_at(x=150, y=75, hold_ms=0)
         assert ctx.eval("fixtureWindow.document.getElementById('check').checked") is True
         assert ctx.click_at(x=-1, y=-1) is False
