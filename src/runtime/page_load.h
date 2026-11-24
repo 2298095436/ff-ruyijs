@@ -13,7 +13,7 @@ namespace ruyijs::resource_network { class AsyncHttp; }
 #include "document_model/form_submission.h"
 
 namespace ruyijs::browser_environment { class Environment; }
-namespace ruyijs::document_model { class Realm; }
+namespace ruyijs::document_model { class Realm; enum class DocumentStreamAction; }
 namespace ruyijs::interaction { class Realm; }
 namespace ruyijs::execution_scheduling { class Realm; }
 namespace ruyijs::web_platform { class Realm; }
@@ -47,6 +47,7 @@ class PageLoad final {
         scheduling_(scheduling), frames_(frames) {}
   static bool ScriptPort(void*, document_model::Realm&, interaction::Realm&,
       browser_environment::Environment&, JS::HandleObject, JS::HandleObject, bool);
+  static bool DocumentStreamPort(void*, document_model::Realm&, document_model::DocumentStreamAction);
   static bool FormDataPort(void*, document_model::Realm&,
       const std::vector<document_model::FormField>&, JS::MutableHandleObject);
   static bool FormNavigatePort(void*, document_model::Realm&, JS::HandleObject,
@@ -247,6 +248,7 @@ class PageLoad final {
   // navigate again, so the product bounds that recursion. Frame loads share the
   // same budget: they run re-entrantly from the parent's own parse.
   uint32_t depth_ = 0;
+  uint32_t streamDepth_ = 0;
   // SetDocumentStartScript's source; empty when nothing is installed.
   std::string documentStart_;
   // Reentrancy guard: the document-start script's own document.write or

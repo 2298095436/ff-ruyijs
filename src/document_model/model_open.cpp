@@ -17,6 +17,7 @@ Status Model::OpenParse(NodeKey key, bool* opened) noexcept {
         found->second->insertion != html::Session::kNoInsertion) return;
     auto session = std::make_unique<html::Session>(DomString());
     session->tree.root = owner.id();
+    session->tree.scripts = true;
     session->insertion = 0;
     session->script_created = true;
     BindParserNotice(*session, State(), key.document);
@@ -34,6 +35,39 @@ Status Model::OpenParse(NodeKey key, bool* opened) noexcept {
     owner.set_current_script(0);
     State().Touch();
     *opened = true;
+  });
+}
+Status Model::WrittenScript(NodeKey key, bool finish, NodeKey* script, bool* complete) noexcept {
+  return Protect([&] {
+    *script = {}; *complete = false;
+    auto found = State().parsers.find(key.document);
+    if (found == State().parsers.end() || !found->second || !found->second->script_created) return;
+    auto& session = *found->second;
+    auto& owner = State().document(key);
+    if (session.pending_script) {
+      *script = Key(key.document, session.pending_script);
+      session.pending_script = 0;
+      session.insertion = session.tokenizer.Position();
+      return;
+    }
+    const html::Budget budget = [&](size_t nodes, size_t units) { State().budget(nodes, units); };
+    session.tokenizer.Rebase(session.input);
+    while (finish || session.tokenizer.Position() < session.input.size()) {
+      html::Token token = session.tokenizer.Next();
+      const bool end = token.kind == html::Token::Kind::End;
+      if (auto node = html::Build(owner, session.tree, token, budget)) {
+        *script = Key(key.document, node);
+        session.insertion = session.tokenizer.Position();
+        State().Touch();
+        return;
+      }
+      if (end) {
+        if (finish) { State().parsers.erase(found); *complete = true; }
+        break;
+      }
+    }
+    if (!*complete) session.insertion = session.input.size();
+    State().Touch();
   });
 }
 Status Model::CloseParse(NodeKey key) noexcept {

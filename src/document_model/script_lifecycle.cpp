@@ -38,12 +38,13 @@ void State::FlushScriptChanges() {
   auto scopes=std::move(deferredScriptScopes);deferredScriptScopes.clear();
   for(auto key:scopes)Changed(this,key,true);
 }
-void Realm::SetScriptPort(ScriptPort port,void* context) {
+void Realm::SetScriptPort(ScriptPort port,void* context,DocumentStreamPort stream) {
   auto& s=*state_;++s.scriptGeneration;s.scriptPort=port;s.scriptContext=context;
+  s.documentStreamPort=stream;
   s.model.SetScriptSink(port?Changed:nullptr,port?&s:nullptr);
 }
 void Realm::CopyScriptPortFrom(const Realm& source) {
-  SetScriptPort(source.state_->scriptPort,source.state_->scriptContext);
+  SetScriptPort(source.state_->scriptPort,source.state_->scriptContext,source.state_->documentStreamPort);
 }
 uint64_t Realm::ScriptGeneration() const {return state_->scriptGeneration;}
 bool Realm::CurrentScript(JS::MutableHandleObject result) {

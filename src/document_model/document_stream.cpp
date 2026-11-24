@@ -62,6 +62,8 @@ bool Call(JSContext* cx, unsigned argc, JS::Value* vp) {
     bool written = false;
     State& owner = entry->owner ? *entry->owner : state;  // The document's own parser.
     if (!owner.Check(owner.model.ParserWrite(entry->key, text, &written))) return false;
+    if (written && Same(entry->key, owner.main) && owner.documentStreamPort &&
+        !owner.documentStreamPort(owner.scriptContext, *owner.sourceRealm, DocumentStreamAction::Write)) return false;
     args.rval().setUndefined();
     return true;
   }
@@ -69,9 +71,16 @@ bool Call(JSContext* cx, unsigned argc, JS::Value* vp) {
   if (method == Open) {
     bool opened = false;
     if (!owner.Check(owner.model.OpenParse(entry->key, &opened))) return false;
+    if (opened && Same(entry->key, owner.main)) {
+      ++owner.scriptGeneration;
+      if (owner.documentStreamPort &&
+          !owner.documentStreamPort(owner.scriptContext, *owner.sourceRealm, DocumentStreamAction::Open)) return false;
+    }
     args.rval().set(args.thisv());
   } else if (method == Close) {
-    if (!owner.Check(owner.model.CloseParse(entry->key))) return false;
+    if (Same(entry->key, owner.main) && owner.documentStreamPort) {
+      if (!owner.documentStreamPort(owner.scriptContext, *owner.sourceRealm, DocumentStreamAction::Close)) return false;
+    } else if (!owner.Check(owner.model.CloseParse(entry->key))) return false;
     args.rval().setUndefined();
   } else if (method == HasFocus) {
     args.rval().setBoolean(true);

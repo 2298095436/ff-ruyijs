@@ -8,6 +8,7 @@
 // the original synchronous preparation is kept unchanged.
 #include "runtime/page_load.h"
 #include "runtime/browsing_context.h"
+#include "runtime/module_session.h"
 #include "document_model/realm.h"
 #include "browser_environment/environment.h"
 #include "interaction/realm.h"
@@ -36,6 +37,87 @@ bool PageLoad::ScriptPort(void* context,document_model::Realm& document,interact
   }
   Owners owners{loader.cx_,page,environment,document,events,loader.Network(*target),*target->platform};
   return loader.Dynamic(owners,script,external);
+}
+bool PageLoad::DocumentStreamPort(void* raw, document_model::Realm& document,
+                                 document_model::DocumentStreamAction action) {
+  auto& loader = *static_cast<PageLoad*>(raw);
+  BrowsingContext* target = loader.Find(document);
+  if (!target) return true;
+  JSContext* cx = loader.cx_;
+  JSAutoRealm realm(cx, target->page);
+  Owners owners = loader.OwnersOf(*target, target->page);
+  if (action == document_model::DocumentStreamAction::Open) {
+    target->loadCompletion = nullptr;
+    // Opening the initial same-origin blank frame from its creator gives the
+    // written document the creator's URL, so relative scripts use that origin.
+    JS::RootedValue href(cx);
+    std::string url;
+    if (!target->environment->URL(&href)) return false;
+    if (href.isString()) {
+      JS::RootedString text(cx, href.toString());
+      if (!ToUTF8(cx, text, &url)) return false;
+    }
+    if (target->parent && (url.empty() || url == "about:blank")) {
+      BrowsingContext* source = target->parent;
+      for (;;) {
+        if (!source->environment->URL(&href)) return false;
+        JS::RootedString text(cx, href.toString());
+        if (!ToUTF8(cx, text, &url)) return false;
+        if (url != "about:blank" || !source->parent) break;
+        source = source->parent;
+      }
+      url = url.substr(0, url.find('#'));
+      if (!target->environment->SetFrameLocation(url)) return false;
+    }
+    if (target->moduleSession) {
+      target->moduleSession->Retire();
+      target->retiredModuleSessions.push_back(std::move(target->moduleSession));
+    }
+    target->moduleSession = std::make_unique<ModuleSession>(cx, owners.resources);
+    loader.RunDocumentStart(owners);
+    return true;
+  }
+  if (loader.streamDepth_ >= 32) {
+    JS_ReportErrorASCII(cx, "Document stream script nesting limit exceeded");
+    return false;
+  }
+  struct Guard { uint32_t& depth; ~Guard() { --depth; } } guard{loader.streamDepth_};
+  ++loader.streamDepth_;
+  const uint64_t generation = document.ScriptGeneration();
+  for (size_t count = 0; count < 10000; ++count) {
+    JS::RootedObject script(cx);
+    bool complete = false;
+    if (!document.WrittenScript(action == document_model::DocumentStreamAction::Close,
+                                &script, &complete)) return false;
+    if (!script) {
+      if (complete) {
+        JS::RootedObject node(cx, document.document()), completion(cx);
+        if (!node || !document.SetReadyState(document_model::ReadyState::Interactive) ||
+            !owners.events.Fire(node, "readystatechange", false, false) ||
+            !owners.events.Fire(node, "DOMContentLoaded", true, false)) return false;
+        return loader.QueueCompletion(owners, target->parent != nullptr, &completion);
+      }
+      return true;
+    }
+    JS::RootedValue href(cx), src(cx);
+    JS::RootedString code(cx);
+    std::string base, filename;
+    bool defer = false, module = false;
+    if (!owners.environment.URL(&href)) return false;
+    JS::RootedString text(cx, href.toString());
+    if (!ToUTF8(cx, text, &base) ||
+        !loader.Source(owners, script, base, &code, &filename, &defer, nullptr, &module)) return false;
+    if (code) {
+      uint32_t executed = 0;
+      if (module || defer) {
+        if (!document.ScriptAttribute(script, u"src", &src) ||
+            !loader.Dynamic(owners, script, !src.isNull())) return false;
+      } else if (!loader.Execute(owners, script, code, filename, &executed, 1)) return false;
+    }
+    if (document.ScriptGeneration() != generation) return true;
+  }
+  JS_ReportErrorASCII(cx, "Document stream exceeded the script budget");
+  return false;
 }
 bool PageLoad::Dynamic(Owners& owners,JS::HandleObject script,bool external) {
   auto* cx=owners.cx;

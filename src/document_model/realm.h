@@ -18,6 +18,8 @@ struct State;
 class Realm;
 using ScriptPort = bool (*)(void*, Realm&, interaction::Realm&,
     browser_environment::Environment&, JS::HandleObject page, JS::HandleObject script, bool external);
+enum class DocumentStreamAction { Open, Write, Close };
+using DocumentStreamPort = bool (*)(void*, Realm&, DocumentStreamAction);
 struct GeometryNode;
 struct LayoutNodeSource;
 // Runtime ports for an iframe's browsing context. Create assembles the child
@@ -245,6 +247,7 @@ class Realm final {
   bool BeginLoad(JS::HandleString markup);
   // Next parser-inserted script element; null once the markup is consumed.
   bool NextScript(JS::MutableHandleObject script);
+  bool WrittenScript(bool finish, JS::MutableHandleObject script, bool* complete);
   bool SetReadyState(ReadyState state);
   // True once the main document left readyState "loading" (its DOMContentLoaded
   // point); the Service Worker container enables its client message queue then.
@@ -257,7 +260,7 @@ class Realm final {
   bool ScriptText(JS::HandleObject script, JS::MutableHandleValue result);
   // Where the parser found this script's text in the document (0, 0 if not).
   bool ScriptPosition(JS::HandleObject script, uint32_t* line, uint32_t* column);
-  void SetScriptPort(ScriptPort, void*);
+  void SetScriptPort(ScriptPort, void*, DocumentStreamPort = nullptr);
   void CopyScriptPortFrom(const Realm&);
   void SetFormPorts(FormDataPort, FormNavigatePort, void*);
   void CopyFormPortsFrom(const Realm&);

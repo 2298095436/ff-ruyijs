@@ -625,6 +625,7 @@ class Model final {
   // (implied elements are created) and sets readyState complete.
   Status OpenParse(NodeKey document, bool* opened) noexcept;
   Status CloseParse(NodeKey document) noexcept;
+  Status WrittenScript(NodeKey document, bool finish, NodeKey* script, bool* complete) noexcept;
   Status SetReadyState(NodeKey document, ReadyState state) noexcept;
   // Null clears it; otherwise an HTML script element of that document.
   Status SetCurrentScript(NodeKey document, NodeKey script) noexcept;

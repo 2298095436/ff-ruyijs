@@ -339,7 +339,7 @@ bool RunSession(JSContext* cx, const SessionOptions& session, js::cli::OptionPar
     document_model::Realm& document;
     ~ScriptPortBinding(){document.SetScriptPort(nullptr,nullptr);document.SetFormPorts(nullptr,nullptr,nullptr);}
   } scriptBinding{*main->document};
-  main->document->SetScriptPort(&PageLoad::ScriptPort,&pageLoad);
+  main->document->SetScriptPort(&PageLoad::ScriptPort,&pageLoad,&PageLoad::DocumentStreamPort);
   main->document->SetFormPorts(&PageLoad::FormDataPort,&PageLoad::FormNavigatePort,&pageLoad);
   // The frame-load ports: the one coordinator above runs an iframe `src` load
   // or an inline `srcdoc` document against that frame's own owners. The guard

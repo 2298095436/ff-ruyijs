@@ -36,6 +36,18 @@ bool Realm::NextScript(JS::MutableHandleObject script) {
   script.set(value.isObject() ? &value.toObject() : nullptr);
   return true;
 }
+bool Realm::WrittenScript(bool finish, JS::MutableHandleObject script, bool* complete) {
+  State& state = *state_;
+  JSAutoRealm realm(state.cx, state.page);
+  NodeKey key;
+  JS::RootedValue value(state.cx);
+  if (!state.Check(state.model.WrittenScript(state.main, finish, &key, complete)) ||
+      !state.Wrap(key, &value)) return false;
+  bool execute = false, external = false;
+  if (key.node && !state.Check(state.model.PrepareScript(key, true, &execute, &external))) return false;
+  script.set(value.isObject() ? &value.toObject() : nullptr);
+  return true;
+}
 bool Realm::SetReadyState(ReadyState ready) {
   return state_->Check(state_->model.SetReadyState(state_->main, ready));
 }

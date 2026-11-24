@@ -213,6 +213,7 @@ struct State {
   void NotifyMutation();
   void FlushMutationNotification();
   ScriptPort scriptPort = nullptr;
+  DocumentStreamPort documentStreamPort = nullptr;
   FormDataPort formDataPort = nullptr;
   FormNavigatePort formNavigatePort = nullptr;
   void* formContext = nullptr;
