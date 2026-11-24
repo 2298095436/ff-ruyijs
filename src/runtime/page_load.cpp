@@ -489,6 +489,12 @@ bool PageLoad::Produce(Owners& owners, JS::HandleString html, JS::MutableHandleV
       std::string filename;
       bool defer = false;
       bool module = false;
+      bool asyncModule = false;
+      if (!AsyncModule(owners, script, &asyncModule)) return false;
+      if (asyncModule) {
+        if (!Dynamic(owners, script, true)) return false;
+        continue;
+      }
       if (!Source(owners, script, base, &code, &filename, &defer, nullptr, &module)) return false;
       if (!code) continue;
       if (order && order->Contains(filename)) {

@@ -14,6 +14,7 @@
 #include <new>
 #include "js/Object.h"
 #include "js/Realm.h"
+#include "js/Proxy.h"
 
 namespace ruyijs::resource_network {
 CallbackResult CheckCallbackEntry(State& state,JS::HandleValue callback,CallbackContext context) {
@@ -54,8 +55,8 @@ bool Report(JSContext* cx, Status status) {
 // them stay the ones this Realm owns.
 static bool IsStorageInstance(JSObject* object) {
   return JS::GetClass(object) == &kStorageClass &&
-         !JS::GetReservedSlot(object, 0).isUndefined() &&
-         JS::GetReservedSlot(object, 1).isInt32();
+         !js::GetProxyReservedSlot(object, 0).isUndefined() &&
+         js::GetProxyReservedSlot(object, 1).isInt32();
 }
 static bool InstallSurface(State& s, PageHelpers& helpers, interaction::Realm& events) {
   if (!Report(s.cx, NewArena(&s.arena))) return false;

@@ -546,6 +546,7 @@ class Model final {
   Status InputTypeValue(DomStringView value, DomString* result) const noexcept;
   Status InputWillValidate(NodeKey, bool* result) const noexcept;
   Status InputChecked(NodeKey, bool* result, bool indeterminate = false) const noexcept;
+  Status InputRadioGroup(NodeKey, std::vector<NodeKey>* result) const noexcept;
   Status SetInputChecked(NodeKey, bool value, bool indeterminate = false) noexcept;
   Status ControlValidation(NodeKey, uint32_t* flags, DomString* message = nullptr) const noexcept;
   Status SetInputNumber(NodeKey, double value, bool step) noexcept;

@@ -72,8 +72,11 @@ bool ClickElement(JSContext* cx, unsigned argc, JS::Value* vp) {
   if (disabled || entry->clickInProgress) return true;
   struct Guard { bool& flag; ~Guard() { flag = false; } } guard{entry->clickInProgress};
   entry->clickInProgress = true;
+  ClickActivation activation(cx);
+  if (!BeginClickActivation(cx, element, activation)) return false;
   bool allowed;
   if (!state.interaction.FireClick(element, &allowed)) return false;
+  if (!EndClickActivation(cx, activation, allowed)) return false;
   return !allowed || ActivateFormControl(*entry);
 }
 bool InertElement(JSContext* cx, unsigned argc, JS::Value* vp) {

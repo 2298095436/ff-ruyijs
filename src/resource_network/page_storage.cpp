@@ -10,13 +10,17 @@
 #include "js/Conversions.h"
 #include "js/CharacterEncoding.h"
 #include "js/String.h"
+#include "js/Proxy.h"
+#include "js/Class.h"
+#include "js/PropertyDescriptor.h"
+#include "js/Wrapper.h"
 #include <string>
 
 namespace ruyijs::resource_network {
 // Instance identity for localStorage and sessionStorage. Slot 0 keeps the one
 // StorageArea this page owns, slot 1 selects which area; both are set by the
 // unique installer and never by script.
-static const JSClass kStorageClassDefinition = {"Storage", JSCLASS_HAS_RESERVED_SLOTS(2)};
+static const JSClass kStorageClassDefinition = PROXY_CLASS_DEF("Storage", JSCLASS_HAS_RESERVED_SLOTS(2));
 const JSClass kStorageClass = kStorageClassDefinition;
 
 State::~State() { DetachBodyOperations(*this); DetachXhrs(*this); DetachAbortSignals(*this); Release(arena); if (owns_store) DeleteStorage(store); }
@@ -29,7 +33,6 @@ static State* Owner(const JS::CallArgs& args) {
   return static_cast<State*>(
       js::GetFunctionNativeReserved(&args.callee(), 0).toPrivate());
 }
-static StorageArea* AreaOf(const JS::CallArgs& args) { return Owner(args)->store; }
 // The installed member name of each Storage operation; static names only.
 static const char* StorageName(StorageOp op) {
   switch (op) {
@@ -57,11 +60,12 @@ static JSObject* Native(State& s, JSNative callback, const char* name,
 
 // A prototype method requires a real Storage receiver, so calling it on a plain
 // object throws instead of reading another page's state.
-static bool Which(JSContext* cx, const JS::CallArgs& args, bool* session) {
+static bool Which(JSContext* cx, const JS::CallArgs& args, bool* session, StorageArea** area) {
   if (args.thisv().isObject()) {
-    JSObject* receiver = &args.thisv().toObject();
-    if (JS::GetClass(receiver) == &kStorageClass) {
-      *session = JS::GetReservedSlot(receiver, 1).toInt32() != 0;
+    JSObject* receiver = js::CheckedUnwrapStatic(&args.thisv().toObject());
+    if (receiver && JS::GetClass(receiver) == &kStorageClass) {
+      *session = js::GetProxyReservedSlot(receiver, 1).toInt32() != 0;
+      *area = static_cast<StorageArea*>(js::GetProxyReservedSlot(receiver, 0).toPrivate());
       return true;
     }
   }
@@ -91,14 +95,14 @@ static bool Text(JSContext* cx, const std::string& source, JS::MutableHandleValu
 static bool Access(JSContext* cx, unsigned argc, JS::Value* vp) {
   auto args = JS::CallArgsFromVp(argc, vp);
   bool session = false;
-  if (!Which(cx, args, &session)) return false;
+  StorageArea* area = nullptr;
+  if (!Which(cx, args, &session, &area)) return false;
   // Reported after receiver validation, so an invalid receiver still throws
   // from the same place and records nothing.
   const StorageOp operation = OpOf(args);
   Owner(args)->Observe("Storage", StorageName(operation),
                        operation == StorageOp::Length ? int(ApiAccess::Read)
                                                       : int(ApiAccess::Call));
-  StorageArea* area = AreaOf(args);
   std::string key, value;
   bool found = false;
   switch (operation) {
@@ -148,14 +152,124 @@ static bool StorageConstructor(JSContext* cx, unsigned argc, JS::Value* vp) {
   return Error(cx, "Illegal constructor.");
 }
 
+namespace {
+char storageFamily;
+StorageArea* Store(JS::HandleObject proxy) {
+  return static_cast<StorageArea*>(js::GetProxyReservedSlot(proxy, 0).toPrivate());
+}
+bool Session(JS::HandleObject proxy) {
+  return js::GetProxyReservedSlot(proxy, 1).toInt32() != 0;
+}
+JSObject* Expando(JS::HandleObject proxy) { return &js::GetProxyPrivate(proxy).toObject(); }
+bool Key(JSContext* cx, JS::HandleId id, std::string* key) {
+  JS::RootedValue value(cx);
+  return JS_IdToValue(cx, id, &value) && Text(cx, value, key);
+}
+// Storage has no LegacyOverrideBuiltIns: existing prototype members win over
+// a stored name, while assignments still invoke the named setter.
+bool Visible(JSContext* cx, JS::HandleObject proxy, JS::HandleId id, bool* visible) {
+  JS::RootedObject prototype(cx);
+  bool inherited = false;
+  if (!JS_GetPrototype(cx, proxy, &prototype) ||
+      (prototype && !JS_HasPropertyById(cx, prototype, id, &inherited))) return false;
+  *visible = !inherited;
+  return true;
+}
+class StorageHandler final : public js::BaseProxyHandler {
+ public:
+  constexpr StorageHandler() : BaseProxyHandler(&storageFamily) {}
+  bool getOwnPropertyDescriptor(JSContext* cx, JS::HandleObject proxy, JS::HandleId id,
+      JS::MutableHandle<mozilla::Maybe<JS::PropertyDescriptor>> desc) const override {
+    JS::RootedObject expando(cx, Expando(proxy));
+    if (id.isSymbol()) return JS_GetOwnPropertyDescriptorById(cx, expando, id, desc);
+    desc.reset();
+    bool visible = false, found = false;
+    std::string key, value;
+    if (!Visible(cx, proxy, id, &visible)) return false;
+    if (!visible) return true;
+    if (!Key(cx, id, &key) || !Report(cx, StorageGet(Store(proxy), Session(proxy), key, &value, &found))) return false;
+    if (!found) return true;
+    JS::RootedValue text(cx);
+    if (!Text(cx, value, &text)) return false;
+    desc.set(mozilla::Some(JS::PropertyDescriptor::Data(text,
+        {JS::PropertyAttribute::Enumerable, JS::PropertyAttribute::Configurable,
+         JS::PropertyAttribute::Writable})));
+    return true;
+  }
+  bool defineProperty(JSContext* cx, JS::HandleObject proxy, JS::HandleId id,
+      JS::Handle<JS::PropertyDescriptor> desc, JS::ObjectOpResult& result) const override {
+    JS::RootedObject expando(cx, Expando(proxy));
+    if (id.isSymbol()) return JS_DefinePropertyById(cx, expando, id, desc, result);
+    if (desc.isAccessorDescriptor()) return result.failNotDataDescriptor();
+    JS::RootedValue input(cx, desc.hasValue() ? desc.value() : JS::UndefinedValue());
+    std::string key, value;
+    return Key(cx, id, &key) && Text(cx, input, &value) &&
+        Report(cx, StorageSet(Store(proxy), Session(proxy), key, value)) && result.succeed();
+  }
+  bool ownPropertyKeys(JSContext* cx, JS::HandleObject proxy,
+                       JS::MutableHandleIdVector keys) const override {
+    size_t length = 0;
+    if (!Report(cx, StorageLength(Store(proxy), Session(proxy), &length))) return false;
+    for (size_t index = 0; index < length; ++index) {
+      bool found = false, visible = false;
+      std::string key;
+      if (!Report(cx, StorageKeyAt(Store(proxy), Session(proxy), index, &key, &found))) return false;
+      if (!found) continue;
+      JS::RootedString text(cx, JS_NewStringCopyUTF8N(cx, JS::UTF8Chars(key.data(), key.size())));
+      JS::RootedId id(cx);
+      if (!text || !JS_StringToId(cx, text, &id) || !Visible(cx, proxy, id, &visible)) return false;
+      if (visible && !keys.append(id)) return false;
+    }
+    JS::RootedObject expando(cx, Expando(proxy));
+    JS::RootedIdVector symbols(cx);
+    return js::GetPropertyKeys(cx, expando, JSITER_OWNONLY | JSITER_HIDDEN | JSITER_SYMBOLS,
+                               &symbols) && keys.appendAll(symbols);
+  }
+  bool delete_(JSContext* cx, JS::HandleObject proxy, JS::HandleId id,
+               JS::ObjectOpResult& result) const override {
+    JS::RootedObject expando(cx, Expando(proxy));
+    if (id.isSymbol()) return JS_DeletePropertyById(cx, expando, id, result);
+    std::string key;
+    return Key(cx, id, &key) && Report(cx, StorageRemove(Store(proxy), Session(proxy), key)) && result.succeed();
+  }
+  bool set(JSContext* cx, JS::HandleObject proxy, JS::HandleId id, JS::HandleValue input,
+           JS::HandleValue receiver, JS::ObjectOpResult& result) const override {
+    if (id.isSymbol() || !receiver.isObject() || &receiver.toObject() != proxy)
+      return BaseProxyHandler::set(cx, proxy, id, input, receiver, result);
+    std::string key, value;
+    return Key(cx, id, &key) && Text(cx, input, &value) &&
+        Report(cx, StorageSet(Store(proxy), Session(proxy), key, value)) && result.succeed();
+  }
+  bool getPrototypeIfOrdinary(JSContext* cx, JS::HandleObject proxy, bool* ordinary,
+                              JS::MutableHandleObject proto) const override {
+    *ordinary = true;
+    return JS_GetPrototype(cx, proxy, proto);
+  }
+  bool preventExtensions(JSContext*, JS::HandleObject, JS::ObjectOpResult& result) const override {
+    return result.failCantPreventExtensions();
+  }
+  bool isExtensible(JSContext*, JS::HandleObject, bool* extensible) const override {
+    *extensible = true;
+    return true;
+  }
+  const char* className(JSContext*, JS::HandleObject) const override { return "Storage"; }
+};
+const StorageHandler storageHandler;
+}  // namespace
+
 // One instance per area, created by this installer from the realm's own
 // prototype; script cannot construct another.
 static bool Instance(State& s, JS::HandleObject prototype, const char* name, bool session) {
   JSContext* cx = s.cx;
-  JS::RootedObject object(cx, JS_NewObjectWithGivenProto(cx, &kStorageClass, prototype));
+  JS::RootedObject expando(cx, JS_NewObjectWithGivenProto(cx, nullptr, nullptr));
+  if (!expando) return false;
+  JS::RootedValue priv(cx, JS::ObjectValue(*expando));
+  js::ProxyOptions options;
+  options.setClass(&kStorageClass);
+  JS::RootedObject object(cx, js::NewProxyObject(cx, &storageHandler, priv, prototype, options));
   if (!object) return false;
-  JS::SetReservedSlot(object, 0, JS::PrivateValue(s.store));
-  JS::SetReservedSlot(object, 1, JS::Int32Value(session ? 1 : 0));
+  js::SetProxyReservedSlot(object, 0, JS::PrivateValue(s.store));
+  js::SetProxyReservedSlot(object, 1, JS::Int32Value(session ? 1 : 0));
   return JS_DefineProperty(cx, s.page, name, object, JSPROP_ENUMERATE);
 }
 

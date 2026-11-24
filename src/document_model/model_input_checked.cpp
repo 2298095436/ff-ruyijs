@@ -2,6 +2,14 @@
 #include "domain/document_model/input_radio_group.h"
 
 namespace ruyijs::document_model {
+Status Model::InputRadioGroup(NodeKey key, std::vector<NodeKey>* result) const noexcept {
+  return Protect([&] {
+    std::vector<NodeKey> group;
+    for (auto id : domain::input_radio_group(State().owner(key), key.node))
+      group.push_back(Key(key.document, id));
+    result->swap(group);
+  });
+}
 Status Model::InputChecked(NodeKey key, bool* value, bool indeterminate) const noexcept {
   return Protect([&] {
     const auto& e = State().element(key);

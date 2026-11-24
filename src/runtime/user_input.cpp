@@ -75,8 +75,11 @@ bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, doub
   if (pointerAllowed && mouseAllowed && !document_model::PointerFocus(cx, target)) return false;
   clock.Pass(hold);
   if (!Pointer(cx, target, "pointerup", x, y, 0, 0, true, clock) ||
-      (pointerAllowed && !Mouse(cx, target, "mouseup", x, y, 0, 1, true, clock)) ||
-      !Pointer(cx, target, "click", x, y, 0, 0, true, clock, &clickAllowed)) return false;
+      (pointerAllowed && !Mouse(cx, target, "mouseup", x, y, 0, 1, true, clock))) return false;
+  document_model::ClickActivation activation(cx);
+  if (!document_model::BeginClickActivation(cx, target, activation) ||
+      !Pointer(cx, target, "click", x, y, 0, 0, true, clock, &clickAllowed) ||
+      !document_model::EndClickActivation(cx, activation, clickAllowed)) return false;
   return !clickAllowed || document_model::Activate(cx, target);
 }
 bool Delay(JSContext* cx, JS::HandleObject request, const char* name, double* value) {

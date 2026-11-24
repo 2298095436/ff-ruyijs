@@ -190,6 +190,9 @@ class PageLoad final {
   bool Source(Owners& owners, JS::HandleObject script, const std::string& base,
               JS::MutableHandleString code, std::string* filename, bool* defer,
               bool* load_error = nullptr, bool* module = nullptr);
+  bool AsyncModule(Owners&, JS::HandleObject script, bool* result);
+  bool ExecuteModule(Owners&, JS::HandleObject script, JS::HandleString code,
+                     const std::string& filename, uint32_t* executed);
   static JSString* ScriptBody(JSContext*, const resource_network::HttpResult&);
   // Speculative preload (donor nsHtml5SpeculativeLoad): the markup's classic
   // script URLs are fetched in parallel from this Context's
@@ -244,6 +247,7 @@ class PageLoad final {
   // navigate again, so the product bounds that recursion. Frame loads share the
   // same budget: they run re-entrantly from the parent's own parse.
   uint32_t depth_ = 0;
+  uint64_t inlineModuleSequence_ = 0;
   // SetDocumentStartScript's source; empty when nothing is installed.
   std::string documentStart_;
   // Reentrancy guard: the document-start script's own document.write or

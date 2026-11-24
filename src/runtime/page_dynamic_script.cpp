@@ -22,7 +22,7 @@
 #include "resource_network/page_http.h"
 namespace ruyijs {
 namespace {
-enum Slot { Page, Script, Code, Filename, Document, Environment, Events, Generation, Loader, Url, Count };
+enum Slot { Page, Script, Code, Filename, Document, Environment, Events, Generation, Loader, Url, Module, Count };
 // How long a delivery task waits before looking at its in-flight fetch again.
 constexpr double kFetchPollMs = 2;
 const JSClass kTask={"Script load task",JSCLASS_HAS_RESERVED_SLOTS(Count)};
@@ -43,15 +43,15 @@ bool PageLoad::Dynamic(Owners& owners,JS::HandleObject script,bool external) {
   JS::RootedValue href(cx);
   if(!owners.environment.URL(&href)||!href.isString())return false;
   JS::RootedString baseValue(cx,href.toString()),code(cx);
-  std::string base,filename,url;bool defer=false,failed=false;
+  std::string base,filename,url;bool defer=false,failed=false,module=false;
   if(!ToUTF8(cx,baseValue,&base))return false;
   resource_network::Realm* frame=nullptr;
   if(BrowsingContext* context=Find(owners.document);context&&context->resources&&
      &context->resources->Resources()!=&resources_)frame=context->resources.get();
   const bool background=external&&DynamicPreloadUrl(owners,script,base,&url)&&
       (StartPreload(url,frame),PreloadPending(PreloadKey(owners.resources,url)));
-  if(!background&&!Source(owners,script,base,&code,&filename,&defer,&failed))return false;
-  if(!external){uint32_t count=0;return !code||Execute(owners,script,code,filename,&count,1,{},"injectedScript");}
+  if(!background&&!Source(owners,script,base,&code,&filename,&defer,&failed,&module))return false;
+  if(!external&&!module){uint32_t count=0;return !code||Execute(owners,script,code,filename,&count,1,{},"injectedScript");}
   JS::RootedObject data(cx,JS_NewObjectWithGivenProto(cx,&kTask,nullptr));
   JS::RootedString name(cx,JS_NewStringCopyN(cx,filename.data(),filename.size()));
   JS::RootedFunction fn(cx,js::NewFunctionWithReserved(cx,DeliverDynamic,0,0,"Script load task"));
@@ -65,6 +65,7 @@ bool PageLoad::Dynamic(Owners& owners,JS::HandleObject script,bool external) {
   JS::SetReservedSlot(data,Events,JS::PrivateValue(&owners.events));
   JS::SetReservedSlot(data,Generation,JS::DoubleValue(owners.document.ScriptGeneration()));
   JS::SetReservedSlot(data,Loader,JS::PrivateValue(this));
+  JS::SetReservedSlot(data,Module,JS::BooleanValue(module));
   // The task polls its preload by key; Source takes it by the same key.
   const std::string polled=PreloadKey(owners.resources,url);
   JS::RootedString pending(cx,JS_NewStringCopyN(cx,polled.data(),polled.size()));
@@ -107,17 +108,20 @@ bool PageLoad::DeliverDynamic(JSContext* cx,unsigned argc,JS::Value* vp) {
     JS::RootedValue href(cx);
     if(!environment.URL(&href)||!href.isString())return false;
     JS::RootedString baseValue(cx,href.toString()),code(cx);
-    std::string base,filename;bool defer=false,failed=false;
-    if(!ToUTF8(cx,baseValue,&base)||!loader.Source(owners,script,base,&code,&filename,&defer,&failed))return false;
+    std::string base,filename;bool defer=false,failed=false,module=false;
+    if(!ToUTF8(cx,baseValue,&base)||!loader.Source(owners,script,base,&code,&filename,&defer,&failed,&module))return false;
     if(!code)return !failed||events.Fire(script,"error",false,false);
     uint32_t count=0;
-    return loader.Execute(owners,script,code,filename,&count,2)&&events.Fire(script,"load",false,false);
+    return (module ? loader.ExecuteModule(owners,script,code,filename,&count)
+                   : loader.Execute(owners,script,code,filename,&count,2))&&events.Fire(script,"load",false,false);
   }
   JS::RootedValue value(cx,JS::GetReservedSlot(data,Code));
   if(!value.isString())return events.Fire(script,"error",false,false);
   JS::RootedString code(cx,value.toString()),name(cx,JS::GetReservedSlot(data,Filename).toString());
   std::string filename;uint32_t count=0;
-  return ToUTF8(cx,name,&filename)&&loader.Execute(owners,script,code,filename,&count,2)&&
+  const bool module=JS::GetReservedSlot(data,Module).toBoolean();
+  return ToUTF8(cx,name,&filename)&&(module ? loader.ExecuteModule(owners,script,code,filename,&count)
+      : loader.Execute(owners,script,code,filename,&count,2))&&
       events.Fire(script,"load",false,false);
 }
 bool PageLoad::DynamicPreloadUrl(Owners& owners,JS::HandleObject script,const std::string& base,std::string* url){
@@ -129,8 +133,11 @@ bool PageLoad::DynamicPreloadUrl(Owners& owners,JS::HandleObject script,const st
   if(!owners.document.ScriptAttribute(script,u"type",&type)||!owners.document.ScriptAttribute(script,u"nomodule",&skip)||
      !owners.document.ScriptAttribute(script,u"src",&src))return false;
   if(type.isString()){JS::RootedString value(cx,type.toString());if(!ToUTF8(cx,value,&text))return false;}
-  // Classic scripts only (a module is fetched by the module owner).
-  if(!ruyijs::domain::document_model::script_classic<char>(text)||!skip.isNull()||!src.isString())return false;
+  // The root bytes can use the same asynchronous transport for classic and
+  // module scripts; the module owner still resolves and links the import graph.
+  const bool module=text=="module";
+  if((!module&&!ruyijs::domain::document_model::script_classic<char>(text))||
+      (!module&&!skip.isNull())||!src.isString())return false;
   JS::RootedString value(cx,src.toString());
   if(!ToUTF8(cx,value,&reference)||reference.empty())return false;
   if(reference.rfind("//",0)==0)reference=base.substr(0,base.find("://")+1)+reference;

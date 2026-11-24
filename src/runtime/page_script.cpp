@@ -2,6 +2,7 @@
 #include "runtime/page_load.h"
 #include "runtime/browsing_context.h"
 #include "runtime/exception_capture.h"
+#include "runtime/module_session.h"
 #include "document_model/realm.h"
 #include "interaction/realm.h"
 #include "execution_scheduling/realm.h"
@@ -12,6 +13,7 @@
 #include "js/CharacterEncoding.h"
 #include "js/Realm.h"
 #include "js/String.h"
+#include "js/Promise.h"
 #include <cctype>
 namespace ruyijs {
 namespace { void NoCheckpoint(JSContext*) {} }
@@ -31,6 +33,18 @@ bool ModuleType(const std::string& type) {
       std::tolower(static_cast<unsigned char>(type[first + 4])) == 'l' &&
       std::tolower(static_cast<unsigned char>(type[first + 5])) == 'e';
 }
+}  // namespace
+bool PageLoad::AsyncModule(Owners& owners, JS::HandleObject script, bool* result) {
+  JS::RootedValue type(owners.cx), async(owners.cx);
+  std::string text;
+  if (!owners.document.ScriptAttribute(script, u"type", &type) ||
+      !owners.document.ScriptAttribute(script, u"async", &async)) return false;
+  if (type.isString()) {
+    JS::RootedString value(owners.cx, type.toString());
+    if (!ToUTF8(owners.cx, value, &text)) return false;
+  }
+  *result = ModuleType(text) && !async.isNull();
+  return true;
 }
 // One fetched classic script body (ScriptLoadHandler::TrySetDecoder): the BOM's
 // encoding (BOM removed), else the response's charset parameter, else the
@@ -98,7 +112,6 @@ bool PageLoad::Source(Owners& owners, JS::HandleObject script, const std::string
   }
   is_module = ModuleType(text);
   if (module) *module = is_module;
-  if (is_module && !module) return true;
   if (!is_module && !ruyijs::domain::document_model::script_classic<char>(text)) return true;
   if (!is_module) {
     if (!owners.document.ScriptAttribute(script, u"nomodule", &skip)) return false;
@@ -111,12 +124,15 @@ bool PageLoad::Source(Owners& owners, JS::HandleObject script, const std::string
   web_security::Realm* security = context ? context->security.get() : nullptr;
   const bool parser_inserted = load_error == nullptr;
   if (src.isNull()) {
-    // This slice handles parser-inserted external modules only. Inline module
-    // evaluation and dynamic module preparation remain outside this owner pass.
-    if (is_module) return true;
     JS::RootedValue inline_source(cx);
     if (!owners.document.ScriptText(script, &inline_source)) return false;
     *filename = base;
+    if (is_module) {
+      // Each inline element is a distinct module; relative imports still use
+      // the document URL. A fragment keeps that URL's resolution base intact.
+      *filename += "#ruyijs-inline-module-" + std::to_string(++inlineModuleSequence_);
+      if (defer) *defer = true;
+    }
     JS::RootedString text(cx, inline_source.isString() ? inline_source.toString() : JS_GetEmptyString(cx));
     bool allowed = true;
     if (security && !security->AllowScript(script, nullptr, text, parser_inserted, &allowed)) return false;
@@ -128,10 +144,9 @@ bool PageLoad::Source(Owners& owners, JS::HandleObject script, const std::string
   if (!ToUTF8(cx, value, &reference) ||
       !owners.document.ScriptAttribute(script, u"async", &async) ||
       !owners.document.ScriptAttribute(script, u"defer", &deferred)) return false;
-  // Parser modules are deferred by definition in this bounded slice. Async
-  // parser modules are out of scope and are skipped instead of misordering them.
+  // Non-async parser modules are deferred. Async and inserted modules use the
+  // delivery task in Dynamic(), sharing the same module map and CSP checks.
   if (is_module) {
-    if (!async.isNull()) return true;
     if (reference.empty()) return true;
     if (defer) *defer = true;
   } else if (defer) {
@@ -157,7 +172,7 @@ bool PageLoad::Source(Owners& owners, JS::HandleObject script, const std::string
   // The speculative table belongs to classic scripts. Module top-level source
   // and its import graph are fetched by the module owner through Resource.
   bool preload_failed = false;
-  if (is_module || !TakePreload(PreloadKey(owners.resources, url), &http, &preload_failed)) {
+  if (!TakePreload(PreloadKey(owners.resources, url), &http, &preload_failed)) {
     if (preload_failed) return failed();
     resource_network::HttpOptions options;options.initiator="script";
     if (!resource_network::PerformHttp(owners.resources, "GET", url, {}, "", &http,
@@ -208,6 +223,40 @@ bool PageLoad::Execute(Owners& owners, JS::HandleObject script, JS::HandleString
   if(owners.document.ScriptGeneration()==generation && !owners.document.SetCurrentScript(previous))return false;
   ++*executed;
   if(phase==0)checkpoint_(cx);
+  if (JS_IsExceptionPending(cx)) CaptureOperationFailure(cx);
+  return true;
+}
+bool PageLoad::ExecuteModule(Owners& owners, JS::HandleObject script, JS::HandleString code,
+                             const std::string& filename, uint32_t* executed) {
+  JSContext* cx = owners.cx;
+  BrowsingContext* context = Find(owners.document);
+  if (!context || !context->moduleSession) return ReportModuleFailure(owners, script, filename);
+  ModuleSession& session = *context->moduleSession;
+  JS::RootedObject module(cx);
+  JS::RootedValue promise(cx);
+  std::string source;
+  if (!ToUTF8(cx, code, &source)) return ReportModuleFailure(owners, script, filename);
+  bool loaded = false;
+  {
+    ModuleSession::Scope scope(session);
+    loaded = session.Load(filename, source, &module);
+    if (loaded) loaded = session.Evaluate(module, &promise);
+  }
+  if (!loaded) return ReportModuleFailure(owners, script, filename);
+  if (promise.isObject()) {
+    JS::RootedObject object(cx, &promise.toObject());
+    const bool rejected = JS::GetPromiseState(object) == JS::PromiseState::Rejected;
+    JS::RootedValue reason(cx, rejected ? JS::GetPromiseResult(object) : JS::UndefinedValue());
+    JS::RootedObject ignored(cx);
+    if (!JS::AddPromiseReactionsIgnoringUnhandledRejection(cx, object, ignored, ignored))
+      return ReportModuleFailure(owners, script, filename);
+    if (rejected) {
+      JS_SetPendingException(cx, reason);
+      return ReportModuleFailure(owners, script, filename);
+    }
+  }
+  ++*executed;
+  checkpoint_(cx);
   if (JS_IsExceptionPending(cx)) CaptureOperationFailure(cx);
   return true;
 }

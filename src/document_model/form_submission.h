@@ -9,6 +9,16 @@ using FormDataPort = bool (*)(void*, Realm&, const std::vector<FormField>&, JS::
 using FormNavigatePort = bool (*)(void*, Realm&, JS::HandleObject form,
                                   JS::HandleObject data, const FormSubmission&);
 struct Wrapper;
+// Root every affected control across click listeners, which may remove nodes
+// or collect wrappers. The domain checked state remains the only value store.
+struct ClickActivation {
+  JS::RootedObjectVector controls;
+  std::vector<bool> checked;
+  bool active = false, original = false, indeterminate = false;
+  explicit ClickActivation(JSContext* cx) : controls(cx) {}
+};
+bool BeginClickActivation(JSContext*, JS::HandleObject target, ClickActivation&);
+bool EndClickActivation(JSContext*, ClickActivation&, bool allowed);
 bool SubmitForm(Wrapper&, JS::HandleValue submitter, bool request);
 bool ActivateFormControl(Wrapper&);
 bool ResetForm(Wrapper&);
