@@ -5,6 +5,7 @@
 namespace ruyijs::execution_scheduling {
 bool State::RunExternal() {
   if (!external.run || !external.run(external.context)) return false;
+  externalTurn = false;
   CheckpointJobs();
   return true;
 }
@@ -31,17 +32,22 @@ Realm::ExternalStep Realm::RunExternalOrDueTask() {
   auto& s = *state_;
   for (;;) {
     if (s.WallExpired()) return ExternalStep::TaskDue;
+    s.SyncClock();
+    const auto now = s.model.Inspect();
+    if (!s.externalTurn &&
+        (s.model.FramePending() || (now.has_next && now.next <= now.now)))
+      return ExternalStep::TaskDue;
     if (s.RunExternal()) return ExternalStep::Ran;
     if (!s.ExternalPending()) return ExternalStep::Idle;
     // Logical time does not move while a transport is pending, so no task can
     // fall due here; keep the former wait.
     if (s.model.Clock().logical) { s.ExternalReady(1000); continue; }
     s.SyncClock();
-    const auto now = s.model.Inspect();
-    if (s.model.FramePending() || (now.has_next && now.next <= now.now))
+    const auto current = s.model.Inspect();
+    if (s.model.FramePending() || (current.has_next && current.next <= current.now))
       return ExternalStep::TaskDue;
     // Wait for a completion until the next task's deadline at the latest.
-    s.WaitUntil(now.has_next ? now.next : now.now + 1000, 1000);
+    s.WaitUntil(current.has_next ? current.next : current.now + 1000, 1000);
   }
 }
 bool Realm::ValidateAdvance(double ms, double step, uint32_t maxTasks) {
@@ -80,9 +86,14 @@ RunResult Realm::Advance(double ms, double step, uint32_t maxTasks, double maxWa
   while (true) {
     s.SyncClock();
     if (s.WallExpired()) { exhausted = true; break; }
-    if (executed < maxTasks && s.RunExternal()) { ++executed; continue; }
     auto now = s.model.Inspect();
     const bool frameBatch = s.model.FramePending();
+    const bool due = frameBatch ||
+        (now.has_next && now.next <= now.now && now.next <= target);
+    if (executed < maxTasks && (s.externalTurn || !due) && s.RunExternal()) {
+      ++executed;
+      continue;
+    }
     if (executed >= maxTasks) {
       exhausted = frameBatch || (now.has_next && now.next <= target) || s.ExternalReady(0);
       if (!exhausted && now.now < target) s.WaitUntil(target, step);
@@ -109,6 +120,7 @@ RunResult Realm::Advance(double ms, double step, uint32_t maxTasks, double maxWa
     if (s.WallExpired()) { exhausted = true; break; }
     TaskSnapshot task;
     if (!s.model.Claim(&task, frameBatch)) break;
+    s.externalTurn = true;
     s.Invoke(task);
     ++executed;
   }
@@ -124,13 +136,17 @@ RunResult Realm::Drain(uint32_t maxTasks, bool (*continueTasks)(void*), void* co
   uint32_t executed = 0;
   while (executed < maxTasks && !s.WallExpired() && (!continueTasks || continueTasks(context))) {
     s.SyncClock();
-    if (s.RunExternal()) { ++executed; continue; }
+    const auto now = s.model.Inspect();
+    const bool frameBatch = s.model.FramePending();
+    const bool due = frameBatch || (now.has_next && now.next <= now.now);
+    if ((s.externalTurn || !due) && s.RunExternal()) { ++executed; continue; }
     TaskSnapshot task;
-    if (!s.model.Claim(&task, s.model.FramePending())) {
+    if (!s.model.Claim(&task, frameBatch)) {
       // Logical time: a pending transport finishes at this instant.
       if (s.model.Clock().logical && s.AwaitExternal(0, 16.667)) continue;
       break;
     }
+    s.externalTurn = true;
     s.Invoke(task);
     ++executed;
   }

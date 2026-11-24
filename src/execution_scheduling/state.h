@@ -103,6 +103,10 @@ struct State {
   bool messageReplay = false;
   std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
   ExternalWork external;
+  // Retain the next task source across bounded advance/drain calls. A stream
+  // of completed HTTP requests must not starve already due page callbacks,
+  // and a stream of page callbacks must still allow HTTP progress.
+  bool externalTurn = true;
   bool wallBound = false;
   std::chrono::steady_clock::time_point wallDeadline;
   bool WallExpired() const { return wallBound && std::chrono::steady_clock::now() >= wallDeadline; }

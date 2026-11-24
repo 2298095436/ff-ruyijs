@@ -105,6 +105,7 @@ case "$step" in
     "${clean[@]}" "$venv/bin/python" "$root/ci/fetch_abort_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/fetch_abort_transfer_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/load_timer_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/external_timer_fairness_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/timer_scale_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/selection_check.py"
     # Cascade rule index, computed style cache, live collections (#36); narrow
