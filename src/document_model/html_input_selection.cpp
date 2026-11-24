@@ -12,9 +12,10 @@ namespace ruyijs::document_model {
 namespace {
 bool FireSelect(JSContext* cx, unsigned argc, JS::Value* vp) {
   auto args = JS::CallArgsFromVp(argc, vp);
-  args.rval().setUndefined();
   JS::RootedObject target(cx, js::CheckedUnwrapStatic(
       &js::GetFunctionNativeReserved(&args.callee(), 0).toObject()));
+  // callee aliases the return slot: capture the traced target first.
+  args.rval().setUndefined();
   if (!target) return true;
   auto* entry = static_cast<Wrapper*>(JS::GetReservedSlot(target, 0).toPrivate());
   if (!entry || entry->dead || !entry->owner) return true;
