@@ -45,6 +45,7 @@ class Realm final {
     double (*now)(void*, JS::HandleObject page) = nullptr;  // ms since this page's time origin
     bool (*post)(void*, JS::HandleObject task) = nullptr;
     bool (*postDelayed)(void*, JS::HandleObject task, double ms) = nullptr;
+    void (*cancel)(void*, JS::HandleObject task) = nullptr;
     void* context = nullptr;
   };
   void SetSchedulingPorts(const SchedulingPorts& ports);

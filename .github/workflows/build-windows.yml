@@ -266,6 +266,7 @@ jobs:
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\document_stream_check.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\css_animation_check.py"
+          wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\animation_task_check.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           wheel-test\Scripts\python.exe "$env:GITHUB_WORKSPACE\ci\pointer_hit_check.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

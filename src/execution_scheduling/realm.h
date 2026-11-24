@@ -65,6 +65,8 @@ class Realm final {
   // Window facade port: one posted-message task on the shared macrotask queue.
   bool PostTask(JS::HandleObject handler);
   bool PostDelayedTask(JS::HandleObject handler,double delay);
+  // Cancel an original native posted task by identity; public timer handles are unaffected.
+  void CancelPostedTask(JS::HandleObject handler);
   // A task that outlives its document: a beacon queued before unload is still
   // sent, as in Firefox. It runs in this owner's own realm.
   bool PostKeepaliveTask(JS::HandleObject handler);

@@ -131,6 +131,7 @@ case "$step" in
     "${clean[@]}" "$venv/bin/python" "$root/ci/native_funnel_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/document_stream_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/css_animation_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/animation_task_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/pointer_hit_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/inline_alignment_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/iframe_monitor_check.py"

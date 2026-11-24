@@ -72,6 +72,9 @@ void BindWindowMessages(BrowsingContext& target, execution_scheduling::Realm& sc
     ports.postDelayed = [](void* context, JS::HandleObject task, double ms) {
       return static_cast<execution_scheduling::Realm*>(context)->PostDelayedTask(task, ms);
     };
+    ports.cancel = [](void* context, JS::HandleObject task) {
+      static_cast<execution_scheduling::Realm*>(context)->CancelPostedTask(task);
+    };
     ports.context = &scheduling;
     target.animation->SetSchedulingPorts(ports);
   }

@@ -35,7 +35,7 @@ bool SetCurrentTime(State& s, JS::HandleObject a, JS::HandleValue value) {
     SetOpt(a, kAHold, seek);
     ApplyPendingRate(a);
     SetOpt(a, kAStart, std::nullopt);
-    CancelTask(a);
+    CancelTask(s, a);
     if (!ResolveReady(s, a)) return false;
   }
   return UpdateFinished(s, a, true, false);
@@ -57,7 +57,7 @@ bool SetStartTime(State& s, JS::HandleObject a, JS::HandleValue value) {
   if (start) SetOpt(a, kAHold, Rate(a) != 0 ? std::nullopt : previous);
   else SetOpt(a, kAHold, previous);
   if (Pending(a)) {
-    CancelTask(a);
+    CancelTask(s, a);
     if (!ResolveReady(s, a)) return false;
   }
   return UpdateFinished(s, a, true, false);
@@ -80,7 +80,7 @@ bool Play(State& s, JS::HandleObject a, bool autoRewind, const char* prefix) {
   }
   if (seek) SetOpt(a, kAHold, seek);
   if (Opt(a, kAHold)) SetOpt(a, kAStart, std::nullopt);
-  if (Pending(a)) { CancelTask(a); pendingReady = true; }
+  if (Pending(a)) { CancelTask(s, a); pendingReady = true; }
   if (!Opt(a, kAHold) && !seek && !abortedPause && JS::GetReservedSlot(a, kAPendingRate).isUndefined())
     return true;
   if (!pendingReady && !NewReady(s, a, false)) return false;
@@ -99,7 +99,7 @@ bool Pause(State& s, JS::HandleObject a, const char* prefix) {
   }
   if (seek) SetOpt(a, kAHold, seek);
   bool pendingReady = false;
-  if (Flag(a, kAPendingPlay)) { CancelTask(a); pendingReady = true; }
+  if (Flag(a, kAPendingPlay)) { CancelTask(s, a); pendingReady = true; }
   if (!pendingReady && !NewReady(s, a, false)) return false;
   SetFlag(a, kAPendingPause, true);
   return ScheduleTask(s, a) && UpdateFinished(s, a, false, false);
@@ -117,11 +117,11 @@ bool Finish(State& s, JS::HandleObject a) {
   if (!Opt(a, kAStart) && now) SetOpt(a, kAStart, *now - limit / Rate(a));
   if (Flag(a, kAPendingPause) && Opt(a, kAStart)) {
     SetOpt(a, kAHold, std::nullopt);
-    CancelTask(a);
+    CancelTask(s, a);
     if (!ResolveReady(s, a)) return false;
   }
   if (Flag(a, kAPendingPlay) && Opt(a, kAStart)) {
-    CancelTask(a);
+    CancelTask(s, a);
     if (!ResolveReady(s, a)) return false;
   }
   return UpdateFinished(s, a, true, true);
@@ -131,7 +131,7 @@ bool Cancel(State& s, JS::HandleObject a) {
   if (!UpdateCssEvents(s, a, true)) return false;
   if (std::strcmp(PlayState(a), "idle")) {
     if (Pending(a)) {
-      CancelTask(a);
+      CancelTask(s, a);
       ApplyPendingRate(a);
       if (!RejectSlot(s, a, kAReady) || !NewReady(s, a, true)) return false;
     }
@@ -140,7 +140,7 @@ bool Cancel(State& s, JS::HandleObject a) {
   }
   SetOpt(a, kAHold, std::nullopt);
   SetOpt(a, kAStart, std::nullopt);
-  JS::SetReservedSlot(a, kATimerTask, JS::NullValue());
+  CancelScheduledTask(s, a, kATimerTask);
   return true;
 }
 

@@ -46,6 +46,15 @@ bool Realm::PostMessageTask(JS::HandleObject handler, JS::HandleObject source,
   return state_->PostMessageTask(handler, source, target, sequence, kind);
 }
 bool Realm::PostKeepaliveTask(JS::HandleObject handler) { return state_->PostTask(handler, true); }
+void Realm::CancelPostedTask(JS::HandleObject handler) {
+  if (!handler) return;
+  auto& s = *state_;
+  for (Callback* cb = s.callbacks.get(); cb; cb = cb->next.get()) {
+    if (cb->kind != Kind::Message || cb->running || cb->handler.get() != JS::ObjectValue(*handler)) continue;
+    s.Drop(cb->id, cb->kind);
+    return;
+  }
+}
 bool Realm::PostDelayedTask(JS::HandleObject handler,double delay){
  auto& s=*state_;if(!handler)return Error(s.cx,"Message task requires a handler");
  std::unique_ptr<Callback> callback(new(std::nothrow) Callback(s.cx));

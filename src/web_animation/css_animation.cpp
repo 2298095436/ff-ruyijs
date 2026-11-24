@@ -61,7 +61,7 @@ bool SameName(State& s, JS::HandleObject a, const std::string& name) {
 
 bool UpdateCssEvents(State& s, JS::HandleObject a, bool cancel) {
   if (JS::GetClass(a) != &kCssAnimationClass || JS::GetReservedSlot(a, kACssName).isNull()) return true;
-  JS::SetReservedSlot(a, kACssTask, JS::NullValue());
+  CancelScheduledTask(s, a, kACssTask);
   JS::RootedObject effect(s.cx, EffectOf(a));
   if (!effect) return true;
   const auto timing = ReadTiming(effect);

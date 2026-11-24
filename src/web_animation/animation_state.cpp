@@ -50,7 +50,7 @@ bool PendingTask(JSContext* cx, unsigned argc, JS::Value* vp) {
     ApplyPendingRate(a);
     SetOpt(a, kAStart, std::nullopt);
   }
-  CancelTask(a);
+  CancelTask(s, a);
   return ResolveReady(s, a) && UpdateFinished(s, a, false, false);
 }
 bool EndTimer(JSContext* cx, unsigned argc, JS::Value* vp) {
@@ -124,7 +124,13 @@ bool RejectSlot(State& s, JS::HandleObject a, uint32_t slot) {
   JS_ClearPendingException(s.cx);
   return JS::RejectPromise(s.cx, promise, error) && JS::SetSettledPromiseIsHandled(s.cx, promise);
 }
+void CancelScheduledTask(State& s, JS::HandleObject a, uint32_t slot) {
+  JS::RootedObject task(s.cx, JS::GetReservedSlot(a, slot).toObjectOrNull());
+  JS::SetReservedSlot(a, slot, JS::NullValue());
+  if (task && s.scheduling.cancel) s.scheduling.cancel(s.scheduling.context, task);
+}
 bool ScheduleTask(State& s, JS::HandleObject a) {
+  CancelScheduledTask(s, a, kAPendingTask);
   JS::RootedObject task(s.cx, NewTask(s, PendingTask, a));
   if (!task) return false;
   JS::SetReservedSlot(a, kAPendingTask, JS::ObjectValue(*task));
@@ -181,8 +187,9 @@ bool UpdateFinished(State& s, JS::HandleObject a, bool didSeek, bool sync) {
   }
   (void)sync;  // Finish notification is queued in both cases; the event is a task (recorded).
   if (std::strcmp(state, "idle") && !Track(s, a)) return false;
-  // The end timer: the time at which a running animation reaches its boundary.
-  JS::SetReservedSlot(a, kATimerTask, JS::NullValue());
+  // The end timer: replace the prior queued boundary, rather than leaving a
+  // stale task for every timing read, seek or unrelated CSS mutation.
+  CancelScheduledTask(s, a, kATimerTask);
   const auto ct = CurrentTime(a);
   if (!std::strcmp(state, "running") && !Pending(a) && ct && rate != 0 && s.scheduling.postDelayed) {
     const double delay = rate > 0 ? (end - *ct) / rate : -*ct / rate;

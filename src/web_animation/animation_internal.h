@@ -37,10 +37,11 @@ bool RejectSlot(State& s, JS::HandleObject animation, uint32_t slot);  // AbortE
 bool NewFinished(State& s, JS::HandleObject animation);
 // The pending play/pause task; one at a time, replaced by identity.
 bool ScheduleTask(State& s, JS::HandleObject animation);
-inline void CancelTask(JSObject* a) {
+void CancelScheduledTask(State& s, JS::HandleObject animation, uint32_t slot);
+inline void CancelTask(State& s, JS::HandleObject a) {
   SetFlag(a, kAPendingPlay, false);
   SetFlag(a, kAPendingPause, false);
-  JS::SetReservedSlot(a, kAPendingTask, JS::NullValue());
+  CancelScheduledTask(s, a, kAPendingTask);
 }
 // Adds a non-idle animation to the realm list getAnimations() reads (animation_list.cpp).
 bool Track(State& s, JSObject* animation);
