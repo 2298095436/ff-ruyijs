@@ -126,7 +126,9 @@ def main():
                     "-DCMAKE_C_COMPILER=" + os.environ.get("CC", "clang"),
                     "-DCMAKE_CXX_COMPILER=" + os.environ.get("CXX", "clang++"),
                     "-DRUYIJS_DONOR_OBJ=" + str(donor.obj)], check=True)
-    subprocess.run(["cmake", "--build", str(build), "--parallel", str(args.jobs)], check=True)
+    # Ninja finishes independent translation units after an error, preserving
+    # useful compiler-cache entries and reporting all diagnostics in one run.
+    subprocess.run(["cmake", "--build", str(build), "--parallel", str(args.jobs), "--", "-k", "0"], check=True)
     subprocess.run(["strip", "--strip-debug", str(root / "dist/js")], check=True)
     subprocess.run([str(root / "dist/js"), "--version"], check=True)
     return 0

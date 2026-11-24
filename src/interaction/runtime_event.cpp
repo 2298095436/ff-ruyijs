@@ -122,13 +122,14 @@ bool Realm::FireAnimation(JS::HandleObject target, const char* type, const std::
   JSContext* cx = s.cx;
   JSAutoRealm realm(cx, s.page);
   JS::RootedObject init(cx, JS_NewPlainObject(cx));
-  JS::RootedString text(cx, JS_NewStringCopyN(cx, name.data(), name.size()));
+  JS::RootedString text(cx, JS_NewStringCopyN(cx, name.data(), name.size())), empty(cx, JS_GetEmptyString(cx));
+  JS::RootedObject installed(cx);
   return init && text && JS_DefineProperty(cx, init, "animationName", text, JSPROP_ENUMERATE) &&
       JS_DefineProperty(cx, init, "elapsedTime", elapsed, JSPROP_ENUMERATE) &&
-      JS_DefineProperty(cx, init, "pseudoElement", "", JSPROP_ENUMERATE) &&
+      JS_DefineProperty(cx, init, "pseudoElement", empty, JSPROP_ENUMERATE) &&
       JS_DefineProperty(cx, init, "bubbles", true, JSPROP_ENUMERATE) &&
       FireRuntimeEvent(s, target, "AnimationEvent", type, Iface::Animation, Kind::Animation, init,
-                       JS::NullHandleObject, time_ms);
+                       installed, time_ms);
 }
 bool Realm::FireError(JS::HandleObject target, JS::HandleValue error,
                      const char* message, const char* filename,
