@@ -1,6 +1,9 @@
-name: Native live query (manual)
+name: Native live query
 
 on:
+  push:
+    branches: [fix/easyjet-native-20261124]
+    paths: [ci/live-query-request.json]
   workflow_dispatch:
     inputs:
       build_run_id:
@@ -33,21 +36,46 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Read explicit query request
+        id: request
+        env:
+          INPUT_BUILD_RUN: ${{ inputs.build_run_id }}
+          INPUT_ORIGIN: ${{ inputs.origin }}
+          INPUT_DESTINATION: ${{ inputs.destination }}
+          INPUT_DATE: ${{ inputs.date }}
+        run: |
+          python - <<'PY'
+          from datetime import datetime
+          import json, os
+          from pathlib import Path
+          request = json.loads(Path('ci/live-query-request.json').read_text())
+          for key in ['build_run_id', 'origin', 'destination', 'date']:
+              env = 'INPUT_BUILD_RUN' if key == 'build_run_id' else 'INPUT_' + key.upper()
+              request[key] = os.environ.get(env) or str(request[key])
+          assert request['build_run_id'].isdigit()
+          assert all(len(request[key]) == 3 and request[key].isascii() and request[key].isalpha()
+                     for key in ['origin', 'destination'])
+          datetime.strptime(request['date'], '%Y-%m-%d')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              for key, value in request.items():
+                  if key in ['build_run_id', 'origin', 'destination', 'date']:
+                      output.write(key + '=' + str(value) + '\n')
+          PY
       - uses: actions/download-artifact@v4
         with:
           name: ruyijs-linux
           path: wheelhouse
           github-token: ${{ github.token }}
-          run-id: ${{ inputs.build_run_id }}
+          run-id: ${{ steps.request.outputs.build_run_id }}
       - name: Install selected wheel
         run: |
           python -m venv "$RUNNER_TEMP/native-query"
           "$RUNNER_TEMP/native-query/bin/python" -m pip install --no-index wheelhouse/*.whl
       - name: Query the real site with native transport
         env:
-          PROBE_ORIGIN: ${{ inputs.origin }}
-          PROBE_DESTINATION: ${{ inputs.destination }}
-          PROBE_DATE: ${{ inputs.date }}
+          PROBE_ORIGIN: ${{ steps.request.outputs.origin }}
+          PROBE_DESTINATION: ${{ steps.request.outputs.destination }}
+          PROBE_DATE: ${{ steps.request.outputs.date }}
         run: |
           "$RUNNER_TEMP/native-query/bin/python" ci/easyjet_live_check.py \
             --origin "$PROBE_ORIGIN" --destination "$PROBE_DESTINATION" \
