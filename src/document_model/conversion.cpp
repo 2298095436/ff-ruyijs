@@ -1,4 +1,6 @@
 #include "document_model/state.h"
+#include "runtime/exception_capture.h"
+#include <cstdio>
 #include "jsfriendapi.h"
 #include "js/Conversions.h"
 #include "js/ErrorReport.h"
@@ -65,7 +67,7 @@ bool NodeArgument(State& state, JS::HandleValue value, NodeKey* key, bool nullab
   if (!entry) return TypeError(state.cx, "Argument is not a Node of this realm");
   *key = entry->key; return true;
 }
-bool State::Check(Status status) {
+bool State::Check(Status status, const std::source_location& caller) {
   // Internal committed-change consumers leave failures pending at this boundary.
   if (JS_IsExceptionPending(cx)) return false;
   // Every owner mutation funnels through here, so this is the single place
@@ -85,6 +87,12 @@ bool State::Check(Status status) {
   status.code == ErrorCode::Namespace ? "NamespaceError" :
   status.code == ErrorCode::NoModification ? "NoModificationAllowedError" :
       status.code == ErrorCode::Syntax ? "SyntaxError" : "InvalidStateError";
-  return ThrowDOM(*this, name, status.message);
+  const bool ok = ThrowDOM(*this, name, status.message);
+  if (NativeInputTraceEnabled()) {
+    std::fprintf(stderr, "ruyijs-dom-failure file=%s line=%u name=%s\n",
+        caller.file_name(), unsigned(caller.line()), name);
+    std::fflush(stderr);
+  }
+  return ok;
 }
 }

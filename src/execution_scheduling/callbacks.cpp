@@ -1,6 +1,7 @@
 #include "execution_scheduling/state.h"
 #include "execution_scheduling/idle.h"
 #include "execution_scheduling/scheduler.h"
+#include "execution_scheduling/trace.h"
 #include "runtime/exception_capture.h"
 #include "js/CallAndConstruct.h"
 #include "js/CompilationAndEvaluation.h"
@@ -11,9 +12,11 @@
 
 namespace ruyijs::execution_scheduling {
 void State::CheckpointJobs() {
+  TaskTrace trace(cx, "checkpoint");
   checkpoint(cx);
   if (!JS_IsExceptionPending(cx) && render && !rendering) {
     rendering = true;
+    TaskTrace renderingTrace(cx, "render");
     if (!render(renderContext)) TraceNativeFailure(cx, __FILE__, __LINE__);
     rendering = false;
   }
@@ -33,6 +36,7 @@ static bool EvaluateHandler(JSContext* cx, JS::HandleString code, JS::MutableHan
          JS::Evaluate(cx, options, source, result);
 }
 void State::Invoke(const TaskSnapshot& task) {
+  TaskTrace trace(cx, "callback", task.id);
   Callback* callback = Find(task.id);
   if (!callback) { model.Complete(task.id); return; }
   if (callback->global && Retired(callback->global)) {

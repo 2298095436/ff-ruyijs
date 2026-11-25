@@ -79,6 +79,11 @@ void ExceptionCapture::Record(JS::HandleValue value, JS::HandleObject stack, boo
   if (!failed_) {
     failed_ = true;
     report_ = DescribeException(cx_, value, stack);
+    if (NativeInputTraceEnabled()) {
+      std::fprintf(stderr, "ruyijs-native-exception name=%s message=%s stack=%s\n",
+          report_.name.c_str(), report_.message.c_str(), report_.stack.c_str());
+      std::fflush(stderr);
+    }
   }
 }
 

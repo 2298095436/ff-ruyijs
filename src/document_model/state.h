@@ -9,6 +9,7 @@
 #include <set>
 #include <string>
 #include <memory>
+#include <source_location>
 #include <unordered_map>
 #include <vector>
 #include "jsapi.h"
@@ -357,7 +358,7 @@ struct State {
   bool TokenListOwned(Wrapper&, DomStringView attribute, JS::MutableHandleValue);
   bool SyncTokenViews(uint64_t revision);
   bool SyncCollections();
-  bool Check(Status);
+  bool Check(Status, const std::source_location& = std::source_location::current());
   // Repoints cached wrappers, reflected facades, frame links and collection keys
   // after an adoption changed a subtree's document identity in place. Runs before
   // the revision-driven collection sync so a live collection resolves the

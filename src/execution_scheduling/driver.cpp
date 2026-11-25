@@ -1,9 +1,11 @@
 #include "execution_scheduling/state.h"
+#include "execution_scheduling/trace.h"
 #include <algorithm>
 #include <cmath>
 
 namespace ruyijs::execution_scheduling {
 bool State::RunExternal() {
+  TaskTrace trace(cx, "external");
   if (!external.run || !external.run(external.context)) return false;
   externalTurn = false;
   CheckpointJobs();
@@ -21,6 +23,7 @@ bool State::AwaitExternal(double until, double step) {
 void Realm::SetExternalWork(const ExternalWork& work) { state_->external = work; }
 bool Realm::RunExternalTask() {
   auto& s = *state_;
+  TaskTrace trace(s.cx, "blocking-external");
   // A parser-blocking script or stylesheet is part of the current task. The
   // advance wall budget can yield between tasks, but cannot resume a C++/JS
   // stack after an unfinished blocking load. Complete this wait under the
