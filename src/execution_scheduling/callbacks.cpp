@@ -14,10 +14,11 @@ void State::CheckpointJobs() {
   checkpoint(cx);
   if (!JS_IsExceptionPending(cx) && render && !rendering) {
     rendering = true;
-    render(renderContext);
+    if (!render(renderContext)) TraceNativeFailure(cx, __FILE__, __LINE__);
     rendering = false;
   }
   if (JS_IsExceptionPending(cx)) {
+    TraceNativeFailure(cx, __FILE__, __LINE__);
     CaptureOperationFailure(cx);
     JS_ClearPendingException(cx);
   }
@@ -69,7 +70,10 @@ void State::Invoke(const TaskSnapshot& task) {
           callback->arguments.length(), callback->arguments.begin());
       ok = JS::Call(cx, receiver, handler, arguments, &result);
     }
-    if (!ok) { CaptureOperationFailure(cx); JS_ClearPendingException(cx); }
+    if (!ok) {
+      TraceNativeFailure(cx, __FILE__, __LINE__, handler);
+      CaptureOperationFailure(cx); JS_ClearPendingException(cx);
+    }
     CheckpointJobs();
   }
   callback->running = false;

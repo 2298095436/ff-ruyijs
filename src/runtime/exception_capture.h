@@ -5,6 +5,7 @@
 #include <string>
 #include "js/Promise.h"
 #include "js/RootingAPI.h"
+#include "js/Value.h"
 
 namespace ruyijs {
 struct ExceptionReport {
@@ -60,6 +61,11 @@ class ExceptionCapture {
   void Overflow(const char* message);
 };
 
+// Opt-in native diagnostics. Never invokes a page getter or changes the exception.
+bool NativeInputTraceEnabled();
+const char* SetNativeInputTracePhase(const char* phase);
+void TraceNativeFailure(JSContext* cx, const char* file, int line,
+                        JS::HandleValue callback = JS::UndefinedHandleValue);
 bool CaptureOperationFailure(JSContext* cx);
 bool FormatOperationFailure(JSContext* cx, JS::MutableHandleValue value);
 bool CaptureShellException(JSContext* cx);

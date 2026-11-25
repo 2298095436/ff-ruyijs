@@ -1,9 +1,45 @@
 #include "runtime/exception_capture.h"
+#include "runtime/runtime.h"
+#include "jsapi.h"
+#include "js/String.h"
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include "js/Exception.h"
 #include "js/Realm.h"
 
 namespace ruyijs {
 static thread_local ExceptionCapture* activeCapture = nullptr;
+static thread_local const char* inputTracePhase = "outside-input";
+bool NativeInputTraceEnabled() {
+  const char* flag = std::getenv("RUYIJS_INPUT_TRACE");
+  return flag && *flag && std::strcmp(flag, "0") != 0;
+}
+const char* SetNativeInputTracePhase(const char* phase) {
+  const char* previous = inputTracePhase;
+  inputTracePhase = phase ? phase : "outside-input";
+  return previous;
+}
+void TraceNativeFailure(JSContext* cx, const char* file, int line, JS::HandleValue callback) {
+  if (!NativeInputTraceEnabled()) return;
+  const bool pending = JS_IsExceptionPending(cx);
+  std::string name;
+  {
+    // Resolving a built-in function identifier may allocate, but does not read
+    // Function.name or run script. Preserve the original exception state.
+    JS::AutoSaveExceptionState saved(cx);
+    if (callback.isObject() && !std::strcmp(JS::GetClass(&callback.toObject())->name, "Function")) {
+      JS::RootedFunction fn(cx, JS_GetObjectFunction(&callback.toObject()));
+      JS::RootedString id(cx);
+      if (fn && JS_GetFunctionId(cx, fn, &id) && id && JS_GetStringLength(id) <= 256)
+        ToUTF8(cx, id, &name);
+    }
+    JS_ClearPendingException(cx);
+  }
+  std::fprintf(stderr, "ruyijs-native-failure file=%s line=%d input_phase=%s pending=%d callback=%s\n",
+      file, line, inputTracePhase, int(pending), name.c_str());
+  std::fflush(stderr);
+}
 
 bool ReadNativeException(JSContext* cx, JS::HandleObject object,
                          JS::MutableHandleString name, JS::MutableHandleString message) {
@@ -109,6 +145,7 @@ bool CaptureOperationFailure(JSContext* cx) {
 }
 
 bool FormatOperationFailure(JSContext* cx, JS::MutableHandleValue value) {
+  TraceNativeFailure(cx, __FILE__, __LINE__);
   ExceptionReport report = {
       "ExecutionTerminated", "JavaScript execution terminated", ""};
   if (JS_IsExceptionPending(cx)) {

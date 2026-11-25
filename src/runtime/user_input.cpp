@@ -3,6 +3,8 @@
 // outside, down/up/click with click as a PointerEvent (pointerId 0), and per
 // character typing (user_keyboard.cpp).
 #include "runtime/user_input.h"
+#include "runtime/exception_capture.h"
+#include <cstdio>
 #include "runtime/input_control.h"
 #include "runtime/runtime.h"
 #include "runtime/user_input_internal.h"
@@ -27,6 +29,34 @@
 namespace ruyijs {
 namespace {
 using user_input::Init;
+struct ClickTrace {
+  JSContext* cx;
+  SchedulingControl& clock;
+  bool enabled = NativeInputTraceEnabled();
+  const char* phase = "begin";
+  const char* previous = nullptr;
+  ClickTrace(JSContext* cx, SchedulingControl& clock) : cx(cx), clock(clock) {
+    if (enabled) previous = SetNativeInputTracePhase(phase);
+  }
+  void Phase(const char* next) {
+    phase = next;
+    if (enabled) SetNativeInputTracePhase(next);
+  }
+  void Step(const char* next) {
+    Phase(next);
+    if (enabled) {
+      std::fprintf(stderr, "ruyijs-input-phase phase=%s clock_ms=%.3f\n", phase, clock.ClockMilliseconds());
+      std::fflush(stderr);
+    }
+  }
+  ~ClickTrace() {
+    if (enabled) {
+      std::fprintf(stderr, "ruyijs-input-exit phase=%s pending=%d\n", phase, int(JS_IsExceptionPending(cx)));
+      std::fflush(stderr);
+      SetNativeInputTracePhase(previous);
+    }
+  }
+};
 // The active window's mozInnerScreenX/Y for the current host action: a real
 // pointer's screenX/Y is its client position plus this origin (Firefox trace
 // 20261021-160155: screenX - clientX = mozInnerScreenX = 30).
@@ -68,6 +98,8 @@ bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, doub
            ClickReport* report = nullptr, TopLevel* hitRoot = nullptr,
            double viewportX = 0, double viewportY = 0,
            const std::u16string* releaseText = nullptr) {
+  ClickTrace trace(cx, clock);
+  trace.Step("enter");
   if (point) { gScreen.x = (*point)[2]; gScreen.y = (*point)[3]; }
   else if (!active.environment->InnerScreenOrigin(&gScreen.x, &gScreen.y)) return false;
   std::array<double, 4> rect{};
@@ -89,11 +121,14 @@ bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, doub
     if (!Mouse(cx, node, "mouseenter", x, y, 0, 0, false, clock)) return false;
   }
   bool pointerAllowed = true, mouseAllowed = true, clickAllowed = true;
+  trace.Step("pointer-down");
   if (!Pointer(cx, target, "pointermove", x, y, -1, 0, true, clock) ||
       !Mouse(cx, target, "mousemove", x, y, 0, 0, true, clock) ||
       !Pointer(cx, target, "pointerdown", x, y, 0, 1, true, clock, &pointerAllowed)) return false;
+  trace.Step("mouse-down");
   // A cancelled pointerdown suppresses the compatibility mouse events.
   if (pointerAllowed && !Mouse(cx, target, "mousedown", x, y, 1, 1, true, clock, &mouseAllowed)) return false;
+  trace.Step("focus");
   if (pointerAllowed && mouseAllowed && !document_model::PointerFocus(cx, target)) return false;
   const double holdStarted = clock.ClockMilliseconds();
   if (report) {
@@ -102,6 +137,7 @@ bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, doub
     report->mouseAllowed = mouseAllowed;
     if (!FocusInPath(cx, active, path, &report->focusedBeforeHold)) return false;
   }
+  trace.Step("hold");
   if (releaseText && !releaseText->empty()) {
     JS::RootedObject textTarget(cx, target), parent(cx);
     for (size_t i = path.length(); i > 0; --i) {
@@ -117,6 +153,7 @@ bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, doub
     }
     const double until = holdStarted + hold;
     for (;;) {
+      trace.Phase("hold-text-read");
       document_model::DomString text;
       JS::RootedValue value(cx, JS::ObjectValue(*textTarget));
       if (!active.document->ReadNodeText(value, &text, 4096)) return false;
@@ -126,9 +163,11 @@ bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, doub
       }
       const double remaining = until - clock.ClockMilliseconds();
       if (remaining <= 0) break;
+      trace.Phase("hold-advance");
       clock.Pass(std::min(100.0, remaining));
     }
   } else clock.Pass(hold);
+  trace.Step("hold-diagnostics");
   if (report) {
     report->heldMs = clock.ClockMilliseconds() - holdStarted;
     if (!FocusInPath(cx, active, path, &report->focusedAfterHold)) return false;
@@ -136,11 +175,12 @@ bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, doub
   }
   JS::RootedObject released(cx, target), clicked(cx, target);
   double upX = x, upY = y;
+  trace.Step("release-hit-test");
   if (hitRoot) {
     BrowsingContext* releaseOwner = nullptr;
     upX = viewportX; upY = viewportY;
     if (!ResolvePointerTarget(cx, hitRoot->Active(), &upX, &upY, &released, &releaseOwner)) return false;
-    if (!released) return true;
+    if (!released) { trace.Step("done-no-release-target"); return true; }
     if (!JS_WrapObject(cx, &released)) return false;
     if (report) report->releaseTargetChanged = released != target;
     // Screen coordinates keep the same physical point even if the receiving
@@ -148,8 +188,11 @@ bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, doub
     gScreen.x = (*point)[0] + (*point)[2] - upX;
     gScreen.y = (*point)[1] + (*point)[3] - upY;
   }
-  if (!Pointer(cx, released, "pointerup", upX, upY, 0, 0, true, clock) ||
-      (pointerAllowed && !Mouse(cx, released, "mouseup", upX, upY, 0, 1, true, clock))) return false;
+  trace.Step("pointer-up");
+  if (!Pointer(cx, released, "pointerup", upX, upY, 0, 0, true, clock)) return false;
+  trace.Step("mouse-up");
+  if (pointerAllowed && !Mouse(cx, released, "mouseup", upX, upY, 0, 1, true, clock)) return false;
+  trace.Step("click-target");
   if (hitRoot) {
     // Pointer Events determines click's common ancestor in the current DOM,
     // after the up handlers. Removing either endpoint suppresses click, but
@@ -167,13 +210,19 @@ bool Click(JSContext* cx, BrowsingContext& active, JS::HandleObject target, doub
       }
     }
   }
-  if (!clicked) return true;
+  if (!clicked) { trace.Step("done-no-click-target"); return true; }
   document_model::ClickActivation activation(cx);
-  if (!document_model::BeginClickActivation(cx, clicked, activation) ||
-      !Pointer(cx, clicked, "click", upX, upY, 0, 0, true, clock, &clickAllowed) ||
-      !document_model::EndClickActivation(cx, activation, clickAllowed)) return false;
+  trace.Step("begin-activation");
+  if (!document_model::BeginClickActivation(cx, clicked, activation)) return false;
+  trace.Step("click-dispatch");
+  if (!Pointer(cx, clicked, "click", upX, upY, 0, 0, true, clock, &clickAllowed)) return false;
+  trace.Step("end-activation");
+  if (!document_model::EndClickActivation(cx, activation, clickAllowed)) return false;
   if (report) report->clickAllowed = clickAllowed;
-  return !clickAllowed || document_model::Activate(cx, clicked);
+  trace.Step("activate");
+  if (clickAllowed && !document_model::Activate(cx, clicked)) return false;
+  trace.Step("done");
+  return true;
 }
 bool Delay(JSContext* cx, JS::HandleObject request, const char* name, double* value) {
   bool present = false;
