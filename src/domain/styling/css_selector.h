@@ -31,6 +31,10 @@ struct ElementNode {
   uint64_t document=0,key=0;
   mutable uint64_t ancestor_bloom=0;
   mutable bool ancestor_bloom_ready=false;
+  // Relation adapters own immutable nodes for one selector/style read session.
+  // Unfiltered positions are shared by every nth rule in that session; a new
+  // DOM revision builds a new input rather than retaining these ordinals.
+  mutable int64_t sibling_positions[4]{};
   bool root=false,empty=true,html=true,focused=false;
   bool has_class(const std::string& name) const {
     return std::find(classes.begin(),classes.end(),name)!=classes.end();

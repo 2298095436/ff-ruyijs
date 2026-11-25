@@ -1,6 +1,30 @@
 #include "domain/styling/css_selector.h"
 #include "domain/styling/css_components.h"
 namespace ruyijs::domain::styling {
+namespace {
+int64_t SiblingPosition(const ElementNode& node,bool reverse,bool typed,size_t& budget) {
+  const size_t slot=(typed?2u:0u)+(reverse?1u:0u);
+  if(!budget) return 0;
+  if(node.sibling_positions[slot]) return node.sibling_positions[slot];
+  std::vector<const ElementNode*> pending;
+  int64_t position=0;
+  for(auto current=&node;current;) {
+    if(!typed||current->tag==node.tag) {
+      if(current->sibling_positions[slot]) {
+        position=current->sibling_positions[slot];break;
+      }
+      pending.push_back(current);
+    }
+    current=current->related(reverse?'+':'-');
+    if(current&&!--budget) return 0;
+  }
+  // Fill every visited position, so the next sibling and the next rule do not
+  // repeat this walk. The typed slot is only read/written for this same tag.
+  for(auto it=pending.rbegin();it!=pending.rend();++it)
+    (*it)->sibling_positions[slot]=++position;
+  return node.sibling_positions[slot];
+}
+}
 bool ParsedSelector::MatchFunctions(const ElementNode& node,const SelectorCompound& part,
                                    const ElementNode* scope,size_t& budget,unsigned depth) {
   for(const auto& fn:part.functions) {
@@ -30,8 +54,15 @@ bool ParsedSelector::MatchFunctions(const ElementNode& node,const SelectorCompou
       };
       if(!eligible(node)) return false;
       int64_t index=1;
-      for(auto next=node.related(reverse?'+':'-');next&&budget;next=next->related(reverse?'+':'-')) {
-        --budget;if(eligible(*next)) ++index;
+      if(fn.selectors.empty()&&node.relations) {
+        index=SiblingPosition(node,reverse,typed,budget);
+        if(!index) return false;
+      } else {
+        // An `of <selector-list>` filter can depend on scope and attributes;
+        // its eligibility remains in the original matcher and is not memoized.
+        for(auto next=node.related(reverse?'+':'-');next&&budget;next=next->related(reverse?'+':'-')) {
+          --budget;if(eligible(*next)) ++index;
+        }
       }
       if(!budget) return false;
       int64_t delta=index-fn.b;
