@@ -104,6 +104,7 @@ struct Pass {
   std::vector<size_t> before_index;
   std::vector<char> same, inputs, dirty, reached, same_node, structural_node;
   bool restart = false, structural = false;
+  std::set<std::pair<uint64_t,uint64_t>> scope_keys;
 };
 std::set<std::string> Tokens(const std::u16string& value);
 // The keys of one element against a set of class, id, tag and attribute keys.
@@ -186,6 +187,9 @@ bool Visit(State& s, JS::HandleObject object, JS::HandleObject target, size_t pa
   JS::RootedObject parent(s.cx);
   JS::RootedObjectVector children(s.cx);
   if(!Read(s,object,&source,&parent,&children)) return false;
+  if(source.element && source.styleScope.node &&
+     pass.scope_keys.emplace(source.styleScope.document,source.styleScope.node).second)
+    pass.cache.scopes.push_back(source.styleScope);
   const size_t index=nodes->size();
   box::BoxNode node;
   node.tag.assign(source.tag.begin(),source.tag.end()); node.text=source.text; node.parent=parent_index;
@@ -199,6 +203,15 @@ bool Visit(State& s, JS::HandleObject object, JS::HandleObject target, size_t pa
   if(previous) {
     const auto hit=previous->meta->index.find({source.key.document,source.key.node});
     if(hit!=previous->meta->index.end() && previous->nodes[hit->second].tag==node.tag) before=hit->second;
+  }
+  if(before!=size_t(-1) && source.element) {
+    const auto& old_scope=previous->meta->style_scopes[before];
+    if(old_scope.document!=source.styleScope.document || old_scope.node!=source.styleScope.node) {
+      // Composed parent/position can stay identical when a light child moves
+      // into a shadow root. Its cascade and ancestor :empty inputs changed.
+      pass.restart=true;
+      return true;
+    }
   }
   LayoutAttributes list;
   list.reserve(source.attributes.size());
@@ -277,6 +290,7 @@ bool Visit(State& s, JS::HandleObject object, JS::HandleObject target, size_t pa
   const bool node_same=before!=size_t(-1) && BoxSameNode(node,previous->nodes[before]);
   nodes->push_back(std::move(node));
   meta.keys.push_back(source.key);
+  meta.style_scopes.push_back(source.styleScope);
   meta.is_element.push_back(source.element ? 1 : 0);
   meta.attributes.push_back(attributes);
   meta.attribute_lists.push_back(std::move(list));
@@ -311,6 +325,25 @@ bool Visit(State& s, JS::HandleObject object, JS::HandleObject target, size_t pa
 }
 bool Same(const document_model::NodeKey& a, const document_model::NodeKey& b) {
   return a.document==b.document&&a.node==b.node;
+}
+bool ScopeStamp(State& s, JS::HandleValue anchor,
+                const std::vector<document_model::NodeKey>& scopes, uint64_t* stamp) {
+  if(scopes.empty() || !s.boxPorts.wrap || !s.boxPorts.stamp) return false;
+  uint64_t hash=1469598103934665603ull;
+  hash^=scopes.size(); hash*=1099511628211ull;
+  JS::RootedObject scope(s.cx);
+  for(const auto& key:scopes) {
+    scope.set(nullptr);
+    if(!s.boxPorts.wrap(s.boxPorts.context,anchor,key,&scope) || !scope ||
+       !JS_WrapObject(s.cx,&scope)) return false;
+    // CascadeStamp accepts the original Document/ShadowRoot node as well as
+    // an element: its native scope port resolves that same root, with no JS.
+    uint64_t value=0;
+    if(!s.boxPorts.stamp(s.boxPorts.context,scope,&value)) return false;
+    for(uint64_t part:{key.document,key.node,value}) {hash^=part;hash*=1099511628211ull;}
+  }
+  *stamp=hash;
+  return true;
 }
 }
 namespace {
@@ -370,9 +403,11 @@ bool LayoutFor(State& s, JS::HandleObject element, std::shared_ptr<const LayoutC
   if(!s.boxPorts.viewport(s.boxPorts.context,&viewport.width,&viewport.height,&viewport.scroll_x,&viewport.scroll_y)) return false;
   const std::array<double,4> view{viewport.width,viewport.height,viewport.scroll_x,viewport.scroll_y};
   uint64_t stamp=0;
-  bool stamped=s.boxPorts.stamp&&s.boxPorts.stamp(s.boxPorts.context,target,&stamp);
-  if(!stamped) JS_ClearPendingException(s.cx);  // Uncached: the full path below reports real errors.
   const auto& cached=s.layoutCache;
+  const bool stamped=cached&&!cached->scopes.empty()
+      ? ScopeStamp(s,targetVal,cached->scopes,&stamp)
+      : s.boxPorts.stamp&&s.boxPorts.stamp(s.boxPorts.context,target,&stamp);
+  if(!stamped) JS_ClearPendingException(s.cx);  // Uncached: the full path below reports real errors.
   if(stamped&&cached&&cached->styles==stamp&&cached->viewport==view&&
      Same(cached->root,rootKey)&&Same(cached->focused,focused)) {
     if(cached->revision==revision) {
@@ -419,6 +454,7 @@ bool LayoutFor(State& s, JS::HandleObject element, std::shared_ptr<const LayoutC
     pass.before_index.clear();
     pass.same.clear(); pass.inputs.clear(); pass.dirty.clear(); pass.reached.clear();
     pass.same_node.clear(); pass.structural_node.clear();
+    pass.scope_keys.clear();
     if(!Visit(s,root,target,size_t(-1),pass,0,false,size_t(-1),0)) return false;
   }
   const size_t found=pass.found;
@@ -430,9 +466,24 @@ bool LayoutFor(State& s, JS::HandleObject element, std::shared_ptr<const LayoutC
   }
   if(!box::ComputeBoxLayout(cache->nodes,viewport,&cache->layout,&cache->scrollport,reuse_ptr,&cache->box_cache))
     return WebKit::Fail(s.cx,"Element box layout budget exceeded");
-  // One cascade scope only: a shadow scope's sheets are outside the fingerprint.
-  if(stamped&&styles->Scopes()<=1) {
-    cache->root=rootKey; cache->focused=focused; cache->revision=revision; cache->styles=stamp;
+  // Fingerprint every cascade root the composed layout consumed. A closed
+  // shadow stylesheet can change through CSSOM without a DOM revision; the
+  // target element's own cascade stamp alone would miss that change. Native
+  // source ports without scope identities retain the single-scope fallback.
+  uint64_t complete_stamp=stamp;
+  const bool scoped=cache->scopes.size()>=styles->Scopes() &&
+      ScopeStamp(s,targetVal,cache->scopes,&complete_stamp);
+  bool cacheable=scoped;
+  if(!scoped) {
+    JS_ClearPendingException(s.cx);
+    cache->scopes.clear();
+    cacheable=styles->Scopes()<=1 && s.boxPorts.stamp &&
+        s.boxPorts.stamp(s.boxPorts.context,target,&complete_stamp);
+    if(!cacheable) JS_ClearPendingException(s.cx);
+  }
+  if(cacheable) {
+    cache->root=rootKey; cache->focused=focused; cache->revision=revision;
+    cache->styles=complete_stamp;
     cache->fonts=FontConfigGeneration();
     cache->structure=structure; cache->tree=tree;
     cache->viewport=view;

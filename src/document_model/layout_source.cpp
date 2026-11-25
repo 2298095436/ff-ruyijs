@@ -35,7 +35,9 @@ bool Realm::ReadLayoutNode(JS::HandleValue value, LayoutNodeSource* out,
       if (p.shadow_host.node) parentKey = p.shadow_host;
       else if (p.kind != NodeKind::Element) parentKey = {};
     }
-    if (result.element && !owner.Check(owner.model.Attributes(source.key, &result.attributes))) return false;
+    if (result.element &&
+        (!owner.Check(owner.model.Attributes(source.key, &result.attributes)) ||
+         !owner.Check(owner.model.NodeLink(source.key, NodeRelation::Root, &result.styleScope)))) return false;
     // A host lays out its shadow children; the original light tree stays intact.
     const auto container = node.shadow_root.node ? node.shadow_root : source.key;
     if (!owner.Check(owner.model.Children(container, &keys))) return false;

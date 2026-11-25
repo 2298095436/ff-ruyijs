@@ -22,6 +22,7 @@ using LayoutAttributes = std::vector<std::pair<std::u16string, std::u16string>>;
 // Tree and non-style attribute metadata shared across inline-style-only updates.
 struct LayoutTreeMeta {
   std::vector<document_model::NodeKey> keys;  // Per node, in layout order.
+  std::vector<document_model::NodeKey> style_scopes;  // Original tree scope of each node.
   std::vector<char> is_element;
   std::vector<uint64_t> attributes;  // Per node: hash of its other attributes.
   std::vector<LayoutAttributes> attribute_lists;  // Per node: its attributes (for :has() reach).
@@ -34,6 +35,9 @@ struct LayoutTreeMeta {
 // and viewport all match reads it instead of laying the tree out again.
 struct LayoutCache {
   document_model::NodeKey root, focused;
+  // All original cascade roots encountered by this composed layout. Keep
+  // identities only; the DOM owner supplies their current sheets on reuse.
+  std::vector<document_model::NodeKey> scopes;
   uint64_t revision = 0, styles = 0, structure = 0, tree = 0, fonts = 0;
   std::array<double, 4> viewport{};
   std::vector<box::BoxNode> nodes;

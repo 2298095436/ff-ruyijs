@@ -13,6 +13,8 @@ struct LayoutNodeSource {
   // The node's identity and the owning tree's state when read: the Model
   // revision and the main document's focused element (Web Geometry's cache).
   NodeKey key, focused;
+  // Original Document/ShadowRoot whose author sheets style this element.
+  NodeKey styleScope;
   uint64_t revision = 0;
   // Model::StructureRevision: unchanged when only inline styles changed.
   uint64_t structure = 0;
