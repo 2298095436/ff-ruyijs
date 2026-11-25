@@ -12,10 +12,12 @@
 #include "interaction/realm.h"
 #include "jsfriendapi.h"
 #include "js/Object.h"
+#include "js/Exception.h"
 #include "js/Realm.h"
 #include <algorithm>
 #include <cstring>
 #include <memory>
+#include <new>
 #include "js/RootingAPI.h"
 
 namespace ruyijs::document_model {
@@ -36,25 +38,42 @@ bool RunImageSourceTask(JSContext* cx, unsigned argc, JS::Value* vp) {
   auto args = JS::CallArgsFromVp(argc, vp);
   auto* state = static_cast<State*>(js::GetFunctionNativeReserved(&args.callee(), 0).toPrivate());
   if (!state) { args.rval().setUndefined(); return true; }
-  const auto keys = std::move(state->pendingImageKeys);
-  state->pendingImageKeys.clear();
-  for (const auto& key : keys) ImageSourceChanged(*state, key);
+  const auto images = std::move(state->pendingImageElements);
+  state->pendingImageElements.clear();
+  for (const auto& image : images) {
+    auto* entry = static_cast<Wrapper*>(JS::GetReservedSlot(*image, 0).toPrivate());
+    if (!entry || entry->dead || !entry->owner) continue;
+    ImageSourceChanged(*entry->owner, entry->key);
+    if (JS_IsExceptionPending(cx)) return false;
+  }
   args.rval().setUndefined();
   return true;
 }
 void QueueImageSourceImpl(State& state, NodeKey key) {
-  for (const auto& pending : state.pendingImageKeys)
-    if (Same(pending, key)) return;
-  state.pendingImageKeys.push_back(key);
-  if (state.pendingImageKeys.size() != 1) return;
+  // src belongs to many element types. Only an image schedules image work,
+  // and its task retains the original element, rather than an expiring key.
+  NodeSnapshot node;
+  if (!state.Check(state.model.Inspect(key, &node)) ||
+      std::strcmp(node.interface_name, "HTMLImageElement")) return;
   JSContext* cx = state.cx;
+  JSAutoRealm realm(cx, state.page);
+  JS::RootedValue value(cx);
+  if (!state.Wrap(key, &value) || !value.isObject()) return;
+  JS::RootedObject image(cx, &value.toObject());
+  for (const auto& pending : state.pendingImageElements)
+    if (pending->get() == image) return;
+  std::unique_ptr<JS::PersistentRootedObject> pending(
+      new (std::nothrow) JS::PersistentRootedObject(cx, image));
+  if (!pending) { JS_ReportOutOfMemory(cx); return; }
+  state.pendingImageElements.push_back(std::move(pending));
+  if (state.pendingImageElements.size() != 1) return;
   JS::RootedFunction fn(cx, js::NewFunctionWithReserved(cx, RunImageSourceTask, 0, 0,
                                                         "Image source task"));
-  if (!fn) return;
+  if (!fn) { state.pendingImageElements.clear(); return; }
   JS::RootedObject callback(cx, JS_GetFunctionObject(fn));
   js::SetFunctionNativeReserved(callback, 0, JS::PrivateValue(&state));
   if (!state.environment.PostTask(callback)) {
-    state.pendingImageKeys.clear();
+    state.pendingImageElements.clear();
   }
 }
 // The outcome, on the owning thread at a task boundary.
@@ -87,6 +106,7 @@ void ImageLoaded(void* raw, const ImageLoadOutcome& outcome) {
 }
 void QueueImageSource(State& state, NodeKey key) { QueueImageSourceImpl(state, key); }
 void OrphanImageRequests(State& state, bool settle) {
+  state.pendingImageElements.clear();
   for (ImageRequest* request : state.imageRequests) {
     // A retired document's fetch is cancelled: the element is complete
     // (broken) and fires nothing, as Firefox does for a removed frame.

@@ -278,7 +278,10 @@ struct State {
   // In-flight image fetches of this realm (html_image_load.cpp); ~State orphans
   // them. The blocker count covers those whose node document is `main`.
   std::vector<ImageRequest*> imageRequests;
-  std::vector<NodeKey> pendingImageKeys;
+  // A source-update task owns its image until it starts the fetch. Keeping the
+  // wrapper also follows adoption; an unrooted numeric key can be reclaimed or
+  // replaced while the task waits.
+  std::vector<std::unique_ptr<JS::PersistentRootedObject>> pendingImageElements;
   uint32_t imageLoadBlockers = 0;
   // Reports one access to an install-registered member of this owner.
   void Observe(const char* iface, const char* member, int type) const {
