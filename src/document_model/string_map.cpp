@@ -187,10 +187,8 @@ class Handler final : public js::BaseProxyHandler {
   // live identity.
   void finalize(JS::GCContext*, JSObject* proxy) const override {
     auto* link = static_cast<ReflectedLink*>(js::GetProxyReservedSlot(proxy, 2).toPrivate());
-    auto* factory = static_cast<State*>(js::GetProxyReservedSlot(proxy, 1).toPrivate());
     if (link && link->dataset == proxy) link->dataset = nullptr;
-    if (factory && link && !link->style && !link->dataset && !link->animatedClass)
-      factory->DropReflected(link);
+    ReleaseReflectedFacade(link);
   }
   size_t objectMoved(JSObject* proxy, JSObject* old) const override {
     auto* link = static_cast<ReflectedLink*>(js::GetProxyReservedSlot(proxy, 2).toPrivate());
@@ -224,6 +222,7 @@ bool DataObject(State& state, JS::HandleObject element, JS::MutableHandleObject 
   js::SetProxyReservedSlot(object, 0, JS::ObjectValue(*node));
   js::SetProxyReservedSlot(object, 1, JS::PrivateValue(&factory));
   js::SetProxyReservedSlot(object, 2, JS::PrivateValue(link));
+  ++link->facades;
   link->dataset = object.get();
   out.set(object);
   return true;

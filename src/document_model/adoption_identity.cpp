@@ -36,7 +36,12 @@ void State::TakeAdoptedIdentities(State& source, const Identities& pairs) {
     ReflectedLink& entry = **reflectedSlot;
     const NodeKey key = Destination(pairs, entry.key);
     if (!key.node) { reflectedSlot = &entry.next; continue; }
+    auto indexed = source.reflectedIndex.find(entry.key);
+    const bool cached = indexed != source.reflectedIndex.end() && indexed->second == &entry;
+    if (cached) source.reflectedIndex.erase(indexed);
     entry.key = key;
+    entry.owner = this;
+    if (cached) reflectedIndex[key] = &entry;
     auto moved = std::move(*reflectedSlot);
     *reflectedSlot = std::move(moved->next);
     moved->next = std::move(reflected);

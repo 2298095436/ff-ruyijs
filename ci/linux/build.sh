@@ -137,6 +137,7 @@ case "$step" in
     "${clean[@]}" "$venv/bin/python" "$root/ci/canvas_missing_glyph_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/frame_focus_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/worker_script_security_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/reflected_lifetime_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/pointer_hit_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/inline_alignment_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/iframe_monitor_check.py"

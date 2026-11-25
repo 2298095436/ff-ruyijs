@@ -10,6 +10,7 @@ namespace {
 void Finalize(JS::GCContext*, JSObject* object) {
   auto* link = static_cast<ReflectedLink*>(JS::GetReservedSlot(object, 2).toPrivate());
   if (link && link->animatedClass == object) link->animatedClass = nullptr;
+  ReleaseReflectedFacade(link);
 }
 void Trace(JSTracer*, JSObject* object) {
   auto* link = static_cast<ReflectedLink*>(JS::GetReservedSlot(object, 2).toPrivate());
@@ -59,6 +60,7 @@ bool AnimatedClassObject(Wrapper& entry, JS::MutableHandleValue result) {
     JS::SetReservedSlot(object, 0, JS::ObjectValue(*node));
     JS::SetReservedSlot(object, 1, JS::PrivateValue(&factory));
     JS::SetReservedSlot(object, 2, JS::PrivateValue(link));
+    ++link->facades;
     link->animatedClass = object;
   }
   if (!JS_WrapObject(owner.cx, &object)) return false;

@@ -15,6 +15,7 @@
 #include "js/Wrapper.h"
 #include <cstring>
 #include <new>
+#include <cassert>
 namespace ruyijs::document_model {
 namespace {
 // A collected node wrapper stops naming its node. The finalizer only marks the
@@ -97,11 +98,6 @@ State::~State() {
     JS::SetReservedSlot(entry->object, 0, JS::PrivateValue(nullptr));
     JS::SetReservedSlot(entry->object, 1, JS::PrivateValue(nullptr));
   }
-  for (ReflectedLink* entry = reflected.get(); entry; entry = entry->next.get()) {
-    if (entry->style) JS::SetReservedSlot(entry->style, 2, JS::PrivateValue(nullptr));
-    if (entry->dataset) JS::SetReservedSlot(entry->dataset, 2, JS::PrivateValue(nullptr));
-    if (entry->animatedClass) JS::SetReservedSlot(entry->animatedClass, 2, JS::PrivateValue(nullptr));
-  }
   // Linked caches are destroyed iteratively to bound the native stack.
   while (wrappers) {
     auto current = std::move(wrappers);
@@ -118,6 +114,10 @@ State::~State() {
   while (reflected) {
     auto current = std::move(reflected);
     reflected = std::move(current->next);
+    current->owner = nullptr;
+    // A weak facade may already be doomed and must never be written here.
+    // Its eventual finalizer releases the record without reaching this State.
+    if (current->facades) current.release();
   }
   while (walkers) {
     auto current = std::move(walkers);
@@ -161,16 +161,27 @@ Wrapper* State::Find(NodeKey key) const {
 }
 void State::DropReflected(ReflectedLink* link) {
   if (!link) return;
-  reflectedIndex.erase(link->key);
+  auto indexed = reflectedIndex.find(link->key);
+  if (indexed != reflectedIndex.end() && indexed->second == link)
+    reflectedIndex.erase(indexed);
   auto* slot = &reflected;
   while (*slot) {
     if (slot->get() == link) {
       auto expired = std::move(*slot);
       *slot = std::move(expired->next);
+      expired->owner = nullptr;
+      if (expired->facades) expired.release();
       return;
     }
     slot = &(*slot)->next;
   }
+}
+void ReleaseReflectedFacade(ReflectedLink* link) {
+  if (!link) return;
+  assert(link->facades);
+  if (--link->facades) return;
+  if (link->owner) link->owner->DropReflected(link);
+  else delete link;
 }
 ReflectedLink* State::Reflected(NodeKey key) {
   auto found = reflectedIndex.find(key);
@@ -179,7 +190,7 @@ ReflectedLink* State::Reflected(NodeKey key) {
     if (value->style || value->dataset || value->animatedClass) return value;
     DropReflected(value);
   }
-  std::unique_ptr<ReflectedLink> entry(new (std::nothrow) ReflectedLink(cx, key));
+  std::unique_ptr<ReflectedLink> entry(new (std::nothrow) ReflectedLink(this, key));
   if (!entry) { JS_ReportOutOfMemory(cx); return nullptr; }
   ReflectedLink* raw = entry.get();
   entry->next = std::move(reflected);

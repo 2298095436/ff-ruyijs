@@ -88,7 +88,13 @@ void State::Rekey(const std::vector<std::pair<NodeKey, NodeKey>>& pairs) {
       }
     CustomElementsRekey(*this, from, to);
     for (ReflectedLink* entry = reflected.get(); entry; entry = entry->next.get())
-      if (Same(entry->key, from)) entry->key = to;
+      if (Same(entry->key, from)) {
+        auto indexed = reflectedIndex.find(from);
+        const bool cached = indexed != reflectedIndex.end() && indexed->second == entry;
+        if (cached) reflectedIndex.erase(indexed);
+        entry->key = to;
+        if (cached) reflectedIndex[to] = entry;
+      }
     for (FrameLink* entry = frames.get(); entry; entry = entry->next.get())
       if (Same(entry->frame, from)) entry->frame = to;
     for (auto* record = tokenViews; record; record = record->weakNext) {

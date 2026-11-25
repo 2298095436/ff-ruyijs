@@ -164,12 +164,17 @@ struct FrameLink {
 // realm: each facade clears its slot here when it is collected (T41).
 struct ReflectedLink {
   NodeKey key;
+  State* owner = nullptr;
+  // A replaced weak facade can still be awaiting its finalizer. Every facade
+  // keeps this native record until that finalizer, including after State teardown.
+  size_t facades = 0;
   JSObject* style = nullptr;
   JSObject* dataset = nullptr;
   JSObject* animatedClass = nullptr;
   std::unique_ptr<ReflectedLink> next;
-  ReflectedLink(JSContext*, NodeKey id) : key(id) {}
+  ReflectedLink(State* state, NodeKey id) : key(id), owner(state) {}
 };
+void ReleaseReflectedFacade(ReflectedLink*);
 struct State {
   Realm* sourceRealm = nullptr;  // The containing Realm; no independent lifetime.
   JSContext* cx;
