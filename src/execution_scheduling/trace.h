@@ -14,8 +14,13 @@ class TaskTrace {
  public:
   TaskTrace(JSContext* cx, const char* phase, uint64_t id = 0)
       : cx_(cx), phase_(phase), id_(id) {
-    const char* flag = std::getenv("RUYIJS_TASK_TRACE");
-    enabled_ = flag && *flag && std::strcmp(flag, "0") != 0;
+    // This is a process-start option. Windows getenv takes the CRT environment
+    // lock; doing that at every task/checkpoint costs more than an empty timer.
+    static const bool enabled = [] {
+      const char* flag = std::getenv("RUYIJS_TASK_TRACE");
+      return flag && *flag && std::strcmp(flag, "0") != 0;
+    }();
+    enabled_ = enabled;
     if (enabled_) {
       started_ = std::chrono::steady_clock::now();
       Write("begin", 0);
