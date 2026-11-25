@@ -5,6 +5,7 @@
 #include "web_workers/state.h"
 #include "web_workers/handlers.h"
 #include "web_workers/options.h"
+#include "web_workers/script_policy.h"
 #include "web_workers/bootstrap.h"
 #include "web_workers/clone.h"
 #include "web_workers/error_event.h"
@@ -108,6 +109,8 @@ bool SharedWorkerConstructor(JSContext* cx, unsigned argc, JS::Value* vp) {
       return document_model::ThrowException(cx, exception, "SyntaxError",
           ("SharedWorker constructor: Failed to load worker script at \"" + url + "\"").c_str());
     }
+    if (PrivilegedScriptURL(resolved))
+      return document_model::ThrowException(cx, exception, "SecurityError", "The operation is insecure.");
     const bool network = resolved.rfind("http:", 0) == 0 || resolved.rfind("https:", 0) == 0;
     blocked = resolved.rfind("data:", 0) != 0 && !(network && sameOrigin);
     url = std::move(resolved);

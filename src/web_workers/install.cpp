@@ -3,6 +3,7 @@
 #include "web_workers/bootstrap.h"
 #include "web_workers/error_event.h"
 #include "web_workers/options.h"
+#include "web_workers/script_policy.h"
 #include "document_model/exception.h"
 #include "runtime/native_constructor_trace.h"
 #include "runtime/runtime.h"
@@ -131,6 +132,9 @@ bool WorkerConstructor(JSContext* cx, unsigned argc, JS::Value* vp) {
       return document_model::ThrowException(cx, exception, "SyntaxError",
           ("Worker constructor: Failed to load worker script at \"" + url + "\"").c_str());
     }
+    if (PrivilegedScriptURL(resolved))
+      return document_model::ThrowException(cx, exception, "SecurityError",
+          ("Worker constructor: Failed to load worker script at \"" + url + "\"").c_str());
     // data: scripts run with an opaque origin; other schemes must be same-origin
     // http(s). A refused script is a load failure: the Worker gets `error` later.
     const bool network = resolved.rfind("http:", 0) == 0 || resolved.rfind("https:", 0) == 0;
