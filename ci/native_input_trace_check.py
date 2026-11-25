@@ -23,7 +23,9 @@ html,body{margin:0}button{width:100px;height:50px;border:0;padding:0}
 </style><button id=button>click</button><script>window.clicked=0;button.onclick=()=>clicked++;</script>''')
             report = ctx.click_at(x=20, y=20, hold_ms=10, diagnostics=True)
             assert report['delivered'] and report['heldMs'] == 10 and ctx.eval('clicked') == 1, report
-            ctx.eval("setTimeout(()=>{throw new TypeError('timer-kept-native-trace')},0);void 0")
+            ctx.eval("function nativeTraceTimer(){throw new TypeError('timer-kept-native-trace')}"
+                     "setTimeout(nativeTraceTimer,0);void 0",
+                     filename='native-trace-timer.js?private=value#fragment')
             try:
                 ctx.advance(10, max_tasks=100)
             except JSError as error:
@@ -56,6 +58,10 @@ html,body{margin:0}button{width:100px;height:50px;border:0;padding:0}
             assert 'ruyijs-dom-failure file=' in text and 'name=NotFoundError' in text, text
             assert 'ruyijs-task phase=callback boundary=begin' in text, text
             assert 'ruyijs-task phase=checkpoint boundary=end' in text, text
+            assert 'ruyijs-task-callback id=' in text and 'kind=timeout' in text, text
+            assert 'name="nativeTraceTimer" file="native-trace-timer.js" line=1' in text, text
+            assert 'private=value' not in '\n'.join(
+                row for row in text.splitlines() if row.startswith('ruyijs-task-callback ')), text
         else:
             assert all(marker not in text for marker in
                        ['ruyijs-input-', 'ruyijs-native-failure', 'ruyijs-native-exception',

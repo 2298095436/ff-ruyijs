@@ -6,11 +6,59 @@
 #include "js/CallAndConstruct.h"
 #include "js/CompilationAndEvaluation.h"
 #include "js/Exception.h"
+#include "js/Object.h"
 #include "js/Realm.h"
 #include "js/SourceText.h"
 #include "js/StableStringChars.h"
 
 namespace ruyijs::execution_scheduling {
+namespace {
+const char* KindName(Kind kind) {
+  switch (kind) {
+    case Kind::Timeout: return "timeout";
+    case Kind::Interval: return "interval";
+    case Kind::Frame: return "frame";
+    case Kind::Message: return "message";
+    case Kind::Idle: return "idle";
+    case Kind::WebTask: return "web-task";
+  }
+  return "unknown";
+}
+void TraceHandler(JSContext* cx, const TaskSnapshot& task, uint32_t handle,
+                  JS::HandleValue handler) {
+  std::string name, file;
+  unsigned line = 0;
+  const char* type = handler.isString() ? "string" : "other";
+  {
+    // Read native function metadata without Function.name/toString or page
+    // getters. Delazification may allocate; diagnostics preserve exceptions.
+    JS::AutoSaveExceptionState saved(cx);
+    if (handler.isObject() && !std::strcmp(JS::GetClass(&handler.toObject())->name, "Function")) {
+      type = "function";
+      JS::RootedFunction fn(cx, JS_GetObjectFunction(&handler.toObject()));
+      JS::RootedString id(cx);
+      if (fn && JS_GetFunctionId(cx, fn, &id) && id && JS_GetStringLength(id) <= 256)
+        ToUTF8(cx, id, &name);
+      JS::RootedScript script(cx, fn ? JS_GetFunctionScript(cx, fn) : nullptr);
+      if (script) {
+        if (const char* filename = JS_GetScriptFilename(script)) file = filename;
+        line = JS_GetScriptBaseLineNumber(cx, script);
+      }
+    }
+    JS_ClearPendingException(cx);
+  }
+  // Keep one bounded record per task. URLs need no query or fragment here.
+  if (const auto query = file.find_first_of("?#"); query != std::string::npos) file.resize(query);
+  for (auto* text : {&name, &file}) {
+    if (text->size() > 512) text->resize(512);
+    for (char& c : *text) if (static_cast<unsigned char>(c) < 32 || c == '"') c = '_';
+  }
+  std::fprintf(stderr, "ruyijs-task-callback id=%llu kind=%s handle=%u type=%s name=\"%s\" file=\"%s\" line=%u\n",
+      static_cast<unsigned long long>(task.id), KindName(task.kind), handle, type,
+      name.c_str(), file.c_str(), line);
+  std::fflush(stderr);
+}
+}  // namespace
 void State::CheckpointJobs() {
   TaskTrace trace(cx, "checkpoint");
   checkpoint(cx);
@@ -57,6 +105,7 @@ void State::Invoke(const TaskSnapshot& task) {
     JS::RootedObject home(cx, callback->global ? callback->global : page.get());
     JSAutoRealm realm(cx, home);
     JS::RootedValue handler(cx, callback->handler), result(cx);
+    if (trace.enabled()) TraceHandler(cx, task, callback->publicHandle, handler);
     bool ok;
     if (handler.isString()) {
       JS::RootedString code(cx, handler.toString());

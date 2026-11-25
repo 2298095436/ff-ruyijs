@@ -30,6 +30,7 @@ class TaskTrace {
     if (enabled_) Write("end", std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - started_).count());
   }
+  bool enabled() const { return enabled_; }
  private:
   void Write(const char* boundary, double elapsed) const {
     std::fprintf(stderr, "ruyijs-task phase=%s boundary=%s id=%llu elapsed_ms=%.3f pending=%d\n",
