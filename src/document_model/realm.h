@@ -40,6 +40,13 @@ using FrameDiscard = void (*)(void* context, NodeKey key);
 // first load of a newly connected frame (including its about:blank completion).
 using FrameNavigate = bool (*)(void* context, JS::HandleObject element, NodeKey key,
                                bool initial);
+// The runtime's original browsing-context tree coordinates document focus.
+// Element focus stays in the existing Model; no second active-element store.
+struct FocusPorts {
+  bool (*request)(void*, NodeKey next) = nullptr;
+  bool (*contains)(void*, bool* result) = nullptr;
+  void* context = nullptr;
+};
 // Debug-session port. The owner reports accesses to the members it registered
 // at install time; it never hands out script-supplied names. Null when the
 // Context is not in debug mode, and every call site is then skipped. The kind
@@ -178,6 +185,10 @@ class Realm final {
   bool ActiveElement(JS::MutableHandleObject element);
   // The stored focus target, excluding Document.activeElement's body fallback.
   bool FocusedElement(JS::MutableHandleObject element);
+  bool FocusedElementKey(NodeKey* element);
+  // Runtime-only local update, after the ancestor frame chain is selected.
+  bool ApplyFocus(NodeKey element);
+  void SetFocusPorts(const FocusPorts& ports);
   // document.referrer of this realm's window document (the loading request's Referer).
   void SetDocumentReferrer(const std::string& referrer);
   // Page-load port for the shared runtime coordinator (runtime/page_load.cpp).

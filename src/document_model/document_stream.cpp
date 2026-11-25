@@ -83,7 +83,10 @@ bool Call(JSContext* cx, unsigned argc, JS::Value* vp) {
     } else if (!owner.Check(owner.model.CloseParse(entry->key))) return false;
     args.rval().setUndefined();
   } else if (method == HasFocus) {
-    args.rval().setBoolean(true);
+    bool focused = false;
+    if (Same(entry->key, owner.main) && owner.focusPorts.contains &&
+        !owner.focusPorts.contains(owner.focusPorts.context, &focused)) return false;
+    args.rval().setBoolean(focused);
   } else {
     args.rval().setUndefined();
   }

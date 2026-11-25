@@ -230,6 +230,7 @@ struct State {
   FrameDiscard frameDiscard = nullptr;
   FrameNavigate frameNavigate = nullptr;
   void* frameContext = nullptr;
+  FocusPorts focusPorts;
   ApiMonitorPort apiMonitor = nullptr;
   void* apiMonitorContext = nullptr;
   StyleElementPort styleElement = nullptr;

@@ -202,6 +202,8 @@ class Frames final {
   // wrapper created in a retired realm and later adopted into a current one.
   void SetTopLevel(TopLevel* owner) { topLevel_ = owner; }
   BrowsingContext* FindCurrentDocument(const document_model::Realm&) const;
+  bool RequestFocus(BrowsingContext& source, document_model::NodeKey next);
+  bool ContainsFocus(BrowsingContext& source, bool* result) const;
   // Activation visits this original frame tree; no second topology owner.
   bool NotifyActivation(BrowsingContext& source, double now);
   void ConsumeHistoryActivation(BrowsingContext& source);

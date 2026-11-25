@@ -56,7 +56,7 @@ bool Focusable(State& s, NodeKey key) {
   if (Has(s, key, u"contenteditable", &editable) && Lower(editable) != u"false") return true;
   return Has(s, key, u"tabindex");
 }
-bool MoveFocus(State& s, NodeKey document, NodeKey next) {
+bool MoveLocalFocus(State& s, NodeKey document, NodeKey next) {
   NodeKey previous;
   if (!s.Check(s.model.FocusedElement(document, &previous))) return false;
   if (Same(previous, next)) return true;
@@ -77,6 +77,29 @@ bool MoveFocus(State& s, NodeKey document, NodeKey next) {
     return false;
   if (JS_IsExceptionPending(cx)) return false;
   return Fire(s, next, "focus", false, before) && Fire(s, next, "focusin", true, before);
+}
+bool MoveFocus(State& s, NodeKey document, NodeKey next) {
+  // Detached factory documents have no navigable and cannot gain focus.
+  if (!Same(document, s.main)) return true;
+  // Select ancestors even when this document retained the same focused node
+  // while another frame was active. The local equality shortcut runs later.
+  if (s.focusPorts.request) return s.focusPorts.request(s.focusPorts.context, next);
+  return MoveLocalFocus(s, document, next);
+}
+bool ActiveInScope(State& s, NodeKey scope, JS::MutableHandleValue result) {
+  NodeSnapshot root;
+  if (!s.Check(s.model.Inspect(scope, &root))) return false;
+  const NodeKey document = root.kind == NodeKind::Document ? scope : root.owner_document;
+  DocumentSnapshot snapshot;
+  if (!s.Check(s.model.InspectDocument(document, &snapshot))) return false;
+  NodeKey candidate = snapshot.active_element;
+  if (!candidate.node) { result.setNull(); return true; }
+  bool inShadow = false;
+  if (!s.Check(s.model.Retarget(candidate, &s.model, scope, &candidate, &inShadow))) return false;
+  NodeSnapshot node;
+  if (!s.Check(s.model.Inspect(candidate, &node))) return false;
+  if (!Same(node.root, scope)) { result.setNull(); return true; }
+  return s.Wrap(candidate, result);
 }
 NodeKey OwnerDocument(State& s, NodeKey key) {
   NodeSnapshot node;
@@ -110,10 +133,20 @@ bool BlurElement(JSContext* cx, JS::HandleObject element) {
   Wrapper* entry = Element(cx, element);
   if (!entry) return false;
   State& s = *entry->owner;
+  bool active = true;
+  if (s.focusPorts.contains && !s.focusPorts.contains(s.focusPorts.context, &active)) return false;
+  if (!active) return true;
   const NodeKey document = OwnerDocument(s, entry->key);
   NodeKey focused;
   if (!s.Check(s.model.FocusedElement(document, &focused))) return false;
   return !Same(focused, entry->key) || MoveFocus(s, document, NodeKey{document.document, 0});
+}
+void Realm::SetFocusPorts(const FocusPorts& ports) { state_->focusPorts = ports; }
+bool Realm::FocusedElementKey(NodeKey* element) {
+  return state_->Check(state_->model.FocusedElement(state_->main, element));
+}
+bool Realm::ApplyFocus(NodeKey element) {
+  return focus_detail::MoveLocalFocus(*state_, state_->main, element);
 }
 bool PointerFocus(JSContext* cx, JS::HandleObject target) {
   Wrapper* entry = Element(cx, target);

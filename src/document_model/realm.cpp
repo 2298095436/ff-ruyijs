@@ -1,4 +1,5 @@
 #include "document_model/state.h"
+#include "document_model/focus_internal.h"
 #include "runtime/weak_object.h"
 #include "document_model/sanitizer.h"
 #include "document_model/traversal.h"
@@ -301,13 +302,10 @@ void Realm::SetDocumentReferrer(const std::string& referrer) {
   state_->referrer.assign(referrer.begin(), referrer.end());
 }
 bool Realm::ActiveElement(JS::MutableHandleObject element) {
-  DocumentSnapshot document;
   JS::RootedValue value(state_->cx);
   element.set(nullptr);
-  if (!state_->Check(state_->model.InspectDocument(state_->main, &document))) return false;
-  if (!document.active_element.node) return true;
-  if (!state_->Wrap(document.active_element, &value)) return false;
-  element.set(&value.toObject());
+  if (!focus_detail::ActiveInScope(*state_, state_->main, &value)) return false;
+  if (value.isObject()) element.set(&value.toObject());
   return true;
 }
 bool Realm::FocusedElement(JS::MutableHandleObject element) {

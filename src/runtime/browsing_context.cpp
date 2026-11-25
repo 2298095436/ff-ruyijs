@@ -191,6 +191,7 @@ BrowsingContext::~BrowsingContext() {
     document->SetStyleDocumentListPort(nullptr, nullptr);
     document->SetAdoptedStylesListPort(nullptr, nullptr);
     document->SetFrameLifecycle(nullptr, nullptr, nullptr, nullptr);
+    document->SetFocusPorts({});
   }
   if (!interaction) return;
   interaction->SetPathResolver(nullptr, nullptr, nullptr);
@@ -281,6 +282,15 @@ bool BrowsingContext::Finish(Frames& owner) {
     return true;
   }, this);
   frames = &owner;
+  document->SetFocusPorts({
+      [](void* context, document_model::NodeKey next) {
+        auto& target = *static_cast<BrowsingContext*>(context);
+        return target.frames->RequestFocus(target, next);
+      },
+      [](void* context, bool* result) {
+        auto& target = *static_cast<BrowsingContext*>(context);
+        return target.frames->ContainsFocus(target, result);
+      }, this});
   environment->SetFrameCount(&FrameCount, document.get());
   environment->SetFrameWindowPort([](void* context, size_t index, JS::MutableHandleValue window) {
     return static_cast<document_model::Realm*>(context)->FrameWindowAt(index, window);

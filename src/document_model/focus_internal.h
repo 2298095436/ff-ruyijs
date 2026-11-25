@@ -10,6 +10,8 @@ bool Fire(State&, NodeKey, const char* type, bool bubbles, JS::HandleValue relat
 bool Focusable(State&, NodeKey);
 // Moves `document`'s focus to `next`; a null `next` clears it.
 bool MoveFocus(State&, NodeKey document, NodeKey next);
+bool MoveLocalFocus(State&, NodeKey document, NodeKey next);
+bool ActiveInScope(State&, NodeKey scope, JS::MutableHandleValue result);
 NodeKey OwnerDocument(State&, NodeKey);
 NodeKey PointerFocusTarget(State&, NodeKey);
 Wrapper* Element(JSContext*, JS::HandleObject);

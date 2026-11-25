@@ -1,4 +1,5 @@
 #include "document_model/state.h"
+#include "document_model/focus_internal.h"
 #include "js/Array.h"
 #include "js/Conversions.h"
 #include "js/PropertyAndElement.h"
@@ -33,7 +34,8 @@ bool Read(JSContext* cx, unsigned argc, JS::Value* vp) {
       DomString html;
       return state.Check(state.model.InnerHtml(entry->key, &html)) && Value(cx, DomStringView(html), args.rval());
     }
-    case 7: case 8: case 11: case 12: args.rval().setNull(); return true;
+    case 7: return focus_detail::ActiveInScope(state, entry->key, args.rval());
+    case 8: case 11: case 12: args.rval().setNull(); return true;
   }
   return ThrowDOM(state, "NotSupportedError", "ShadowRoot capability awaits its original subsystem port");
 }

@@ -97,7 +97,8 @@ inline NodeId DocumentAggregate::body_id() const noexcept {
 }
 inline NodeId DocumentAggregate::focused_id() const noexcept {
   const Node* node = focused_id_ ? get_node(focused_id_) : nullptr;
-  while (node && node->parent_id()) node = get_node(node->parent_id());
+  while (node && (node->parent_id() || node->shadow_host_id()))
+    node = get_node(node->parent_id() ? node->parent_id() : node->shadow_host_id());
   return node && node->id() == id() ? focused_id_ : 0;
 }
 inline NodeId DocumentAggregate::active_element_id() const noexcept {

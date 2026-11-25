@@ -1,5 +1,6 @@
 #include "runtime/cf_access_log.h"
 #include "document_model/state.h"
+#include "document_model/focus_internal.h"
 #include "document_model/foreign_adoption.h"
 #include "document_model/collections.h"
 #include "document_model/traversal.h"
@@ -76,7 +77,7 @@ static bool Get(JSContext* cx, unsigned argc, JS::Value* vp) {
   if (field == Root) return state.Wrap(value.document_element, args.rval());
   if (field == Head) return state.Wrap(value.head, args.rval());
   if (field == Body) return state.Wrap(value.body, args.rval());
-  if (field == Active) return state.Wrap(value.active_element, args.rval());
+  if (field == Active) return focus_detail::ActiveInScope(state, entry->key, args.rval());
   if (field == Script) return state.Wrap(value.current_script, args.rval());
   if (field == Hidden) {
     args.rval().setBoolean(value.hidden);
