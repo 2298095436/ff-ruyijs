@@ -3,6 +3,7 @@
 #include "execution_scheduling/scheduler.h"
 #include "execution_scheduling/trace.h"
 #include "runtime/exception_capture.h"
+#include "jsfriendapi.h"
 #include "js/CallAndConstruct.h"
 #include "js/CompilationAndEvaluation.h"
 #include "js/Exception.h"
