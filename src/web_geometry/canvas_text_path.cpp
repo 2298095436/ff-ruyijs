@@ -113,13 +113,19 @@ bool SystemFonts::BuildCanvasTextPath(const std::u16string& text, const FontInpu
     size_t end = start;
     SelectedFont font;
     const uint32_t first = Codepoint(text, &end);
-    if (!collection_->Select(input, first, &font)) return false;
-    while (end < text.size()) {
+    bool missing = false;
+    if (!collection_->Select(input, first, &font, &missing) &&
+        (!missing || !collection_->Select(input, 0x20, &font))) return false;
+    while (!missing && end < text.size()) {
       size_t next = end;
       const uint32_t code = Codepoint(text, &next);
       if (!Continuation(code)) {
         SelectedFont candidate;
-        if (!collection_->Select(input, code, &candidate)) return false;
+        bool absent = false;
+        if (!collection_->Select(input, code, &candidate, &absent)) {
+          if (absent) break;
+          return false;
+        }
         if (font.face.Get() != candidate.face.Get() ||
             font.syntheticItalic != candidate.syntheticItalic)
           break;
@@ -129,7 +135,10 @@ bool SystemFonts::BuildCanvasTextPath(const std::u16string& text, const FontInpu
     FontInput local = input;
     local.x = local.y = 0;
     FontRun run;
-    if (!ShapeFont(font, local, text.substr(start, end - start), &run)) return false;
+    if (missing ? !MissingFontRun(font, local, first, end - start, &run)
+                : !ShapeFont(font, local, text.substr(start, end - start), &run)) return false;
+    // gfxFont::DrawMissingGlyph emits no hexbox for GLYPH_PATH, but its
+    // advance still positions any following supported text.
     if (!run.glyphs.empty()) {
       std::vector<DWRITE_GLYPH_OFFSET> offsets(run.glyphs.size());
       for (size_t i = 0; i < offsets.size(); ++i) {

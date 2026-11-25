@@ -59,14 +59,20 @@ bool SystemFonts::BuildCanvasGlyphMasks(const std::u16string& text, const FontIn
     size_t end = start;
     SelectedFont font;
     const uint32_t first = Codepoint(text, &end);
-    if (!collection_->Select(input, first, &font)) return false;
-    while (end < text.size()) {
+    bool missing = false;
+    if (!collection_->Select(input, first, &font, &missing) &&
+        (!missing || !collection_->Select(input, 0x20, &font))) return false;
+    while (!missing && end < text.size()) {
       if (cjk[end] != cjk[start]) break;
       size_t next = end;
       const uint32_t code = Codepoint(text, &next);
       if (!Continuation(code)) {
         SelectedFont candidate;
-        if (!collection_->Select(input, code, &candidate)) return false;
+        bool absent = false;
+        if (!collection_->Select(input, code, &candidate, &absent)) {
+          if (absent) break;
+          return false;
+        }
         if (font.face.Get() != candidate.face.Get() ||
             font.syntheticItalic != candidate.syntheticItalic) break;
       }
@@ -75,7 +81,22 @@ bool SystemFonts::BuildCanvasGlyphMasks(const std::u16string& text, const FontIn
     FontInput local = input;
     local.x = local.y = 0;
     FontRun run;
-    if (!ShapeFont(font, local, text.substr(start, end - start), &run)) return false;
+    if (missing ? !MissingFontRun(font, local, first, end - start, &run)
+                : !ShapeFont(font, local, text.substr(start, end - start), &run)) return false;
+    if (missing) {
+      if (run.advance > 0) {
+        CanvasGlyphMask mask;
+        mask.missingGlyph = true;
+        mask.missing = {first, float(input.x + double(pen) / 60.0 / input.scale),
+                        float(input.y - run.ascent / 60.0 / input.scale),
+                        float(run.advance / 60.0 / input.scale),
+                        float(run.ascent / 60.0 / input.scale)};
+        result->push_back(std::move(mask));
+      }
+      pen += run.advance;
+      start = end;
+      continue;
+    }
     // gfxFont::DrawGlyphs for a synthetic-oblique run: the context matrix
     // becomes CTM.PreTranslate(p).PreMultiply(Matrix(1, 0, -skew, 1, 0, 0))
     // .PreTranslate(-p), p being the run origin on the baseline (float).
@@ -217,14 +238,20 @@ bool SystemFonts::CanvasGlyphRuns(const std::u16string& text, const FontInput& i
     size_t end = start;
     SelectedFont font;
     const uint32_t first = Codepoint(text, &end);
-    if (!collection_->Select(input, first, &font)) return false;
-    while (end < text.size()) {
+    bool missing = false;
+    if (!collection_->Select(input, first, &font, &missing) &&
+        (!missing || !collection_->Select(input, 0x20, &font))) return false;
+    while (!missing && end < text.size()) {
       if (cjk[end] != cjk[start]) break;
       size_t next = end;
       const uint32_t code = Codepoint(text, &next);
       if (!Continuation(code)) {
         SelectedFont candidate;
-        if (!collection_->Select(input, code, &candidate)) return false;
+        bool absent = false;
+        if (!collection_->Select(input, code, &candidate, &absent)) {
+          if (absent) break;
+          return false;
+        }
         if (font.face.Get() != candidate.face.Get() ||
             font.syntheticItalic != candidate.syntheticItalic) break;
       }
@@ -233,8 +260,22 @@ bool SystemFonts::CanvasGlyphRuns(const std::u16string& text, const FontInput& i
     FontInput local = input;
     local.x = local.y = 0;
     FontRun run;
-    if (!ShapeFont(font, local, text.substr(start, end - start), &run)) return false;
+    if (missing ? !MissingFontRun(font, local, first, end - start, &run)
+                : !ShapeFont(font, local, text.substr(start, end - start), &run)) return false;
     CanvasGlyphRun out;
+    if (missing) {
+      if (run.advance > 0) {
+        out.missingGlyph = true;
+        out.missing = {first, float(input.x + double(pen) / 60.0 / input.scale),
+                       float(input.y - run.ascent / 60.0 / input.scale),
+                       float(run.advance / 60.0 / input.scale),
+                       float(run.ascent / 60.0 / input.scale)};
+        result->push_back(std::move(out));
+      }
+      pen += run.advance;
+      start = end;
+      continue;
+    }
     out.face = font.face.Get();
     out.face->AddRef();
     out.syntheticItalic = font.syntheticItalic;

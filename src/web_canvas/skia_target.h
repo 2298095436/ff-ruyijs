@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include "domain/geometry/missing_glyph.h"
 
 // Windows: the DirectWrite COM face. Darwin: font_backend.h defines this
 // same global name as the Core Text shim. It is not a namespaced type.
@@ -128,6 +129,8 @@ bool StrokeRect(const Surface& surface, const double transform[6], const double 
 // is borrowed for the call.
 struct TextRun {
   ::IDWriteFontFace* face = nullptr;
+  bool missingGlyph = false;
+  domain::geometry::MissingGlyph missing;
   bool syntheticItalic = false;
 #if defined(__linux__)
   bool syntheticBold = false;  // FreeType faces embolden in Skia (font_posix.cpp)

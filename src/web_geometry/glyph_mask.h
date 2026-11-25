@@ -3,6 +3,7 @@
 // draws, and the tone table Skia puts in front of it.
 #include <cstdint>
 #include <vector>
+#include "domain/geometry/missing_glyph.h"
 
 #if defined(__linux__)
 #include "runtime/font_face.h"
@@ -46,6 +47,8 @@ struct CanvasTextPath {
 // the outline layers of a colour glyph (COLR), which the canvas fills into a
 // premultiplied bitmap before blending it whole, the way Skia does.
 struct CanvasGlyphMask {
+  bool missingGlyph = false;
+  domain::geometry::MissingGlyph missing;
   int left = 0, top = 0, width = 0, height = 0;
   std::vector<uint8_t> coverage;  // width*height, gamma-corrected A8
   // A COLR glyph is painted the way gfxFont::RenderColorGlyph paints it: each

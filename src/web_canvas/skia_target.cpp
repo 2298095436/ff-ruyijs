@@ -1300,6 +1300,24 @@ void DrawRuns(SkCanvas* canvas, const Matrix& base, const TextRun* runs, size_t 
   static const float kTanDefaultAngle = float(std::tan(14.0 * (2.0 * kPi / 360.0)));
   for (size_t r = 0; r < runCount; ++r) {
     const TextRun& run = runs[r];
+    if (run.missingGlyph) {
+      canvas->setMatrix(base.ToSkia());
+      Pattern solid;
+      solid.color = pattern.kind == Pattern::Kind::Color ? pattern.color : Color{0, 0, 0, 1};
+      DrawOptions draw = options;
+      draw.antialias = true;
+      AutoPaint paint(canvas, blend, draw, nullptr);
+      domain::geometry::DrawMissingGlyph(run.missing,
+          [&](float x, float y, float width, float height, float opacity) {
+            Pattern color = solid;
+            color.color.a *= opacity;
+            SkPaint rectangle = paint.paint;
+            SetPaintPattern(rectangle, color, paint.alpha);
+            rectangle.setAntiAlias(opacity < 1.0f);  // mini-font pixels use point sampling
+            canvas->drawRect(SkRect::MakeXYWH(x, y, width, height), rectangle);
+          });
+      continue;
+    }
     if (!run.count) continue;
     sk_sp<SkTypeface> typeface = TypefaceFor(run.face);
     if (!typeface) continue;

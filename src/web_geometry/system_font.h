@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include "domain/geometry/svg_values.h"
+#include "domain/geometry/missing_glyph.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -58,6 +59,8 @@ struct CanvasTextMetrics {
 // position in CSS pixels.
 struct CanvasGlyphRun {
   IDWriteFontFace* face = nullptr;
+  bool missingGlyph = false;
+  domain::geometry::MissingGlyph missing;
   bool syntheticItalic = false;
 #if defined(__linux__)
   bool syntheticBold = false;

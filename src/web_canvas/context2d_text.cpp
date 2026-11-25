@@ -151,6 +151,25 @@ bool FillCanvasText(State& state, JS::HandleObject context, const std::u16string
   if (!detail::Fonts(state).BuildCanvasGlyphMasks(text, input, text_matrix, straight, &masks))
     return false;
   for (const auto& mask : masks) {
+    if (mask.missingGlyph) {
+      const double missingMatrix[6] = {text_matrix[0], text_matrix[1], text_matrix[2],
+                                       text_matrix[3], text_matrix[4], text_matrix[5]};
+      domain::geometry::DrawMissingGlyph(mask.missing,
+          [&](float x, float y, float width, float height, float opacity) {
+            raster::Path outline;
+            raster::Point point;
+            Transform(missingMatrix, x, y, &point); outline.Move(point);
+            Transform(missingMatrix, x + width, y, &point); outline.Line(point);
+            Transform(missingMatrix, x + width, y + height, &point); outline.Line(point);
+            Transform(missingMatrix, x, y + height, &point); outline.Line(point);
+            outline.Close();
+            auto color = paint;
+            for (auto& channel : color.rgba)
+              channel = uint8_t(std::floor(channel * opacity + 0.5f));
+            raster::FillPath(outline, surface, color);
+          });
+      continue;
+    }
 #if defined(__linux__)
     if (!mask.rgba.empty()) {
       auto blend = paint;

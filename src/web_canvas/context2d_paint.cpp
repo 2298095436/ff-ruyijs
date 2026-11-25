@@ -461,6 +461,8 @@ bool StrokeRecordedText(State& state, JS::HandleObject context, const std::u16st
     for (const auto& run : runs) {
       skia::TextRun r;
       r.face = run.face;
+      r.missingGlyph = run.missingGlyph;
+      r.missing = run.missing;
       r.syntheticItalic = run.syntheticItalic;
 #if defined(__linux__)
       r.syntheticBold = run.syntheticBold;
@@ -539,6 +541,8 @@ bool FillRecordedText(State& state, JS::HandleObject context, const std::u16stri
     for (const auto& run : runs) {
       skia::TextRun r;
       r.face = run.face;
+      r.missingGlyph = run.missingGlyph;
+      r.missing = run.missing;
       r.syntheticItalic = run.syntheticItalic;
 #if defined(__linux__)
       r.syntheticBold = run.syntheticBold;
