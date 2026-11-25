@@ -1,6 +1,8 @@
 #include "runtime/exception_capture.h"
 #include "runtime/runtime.h"
 #include "jsapi.h"
+#include "jsfriendapi.h"
+#include "js/Object.h"
 #include "js/String.h"
 #include <cstdio>
 #include <cstdlib>
