@@ -254,6 +254,10 @@ class Model final {
   // attribute writes, so class-based collections and classList views stay live
   // without re-collecting on unrelated attribute writes.
   uint64_t ClassRevision() const noexcept;
+  // Per-element NamedNodeMap shape, including HTML/XML named-property rules.
+  // Values are live Attr reads; unrelated nodes and value-only writes do not
+  // change this revision. Missing/retired elements return zero.
+  uint64_t AttributeNamesRevision(NodeKey) const noexcept;
   // Real-change log for the observer owner (src/web_observers). Recording is
   // off until an observer registers, so script that never observes pays one
   // flag test per mutation. MutationsSince copies every notice after a

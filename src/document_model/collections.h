@@ -97,7 +97,7 @@ inline uint64_t TargetCollectionRevision(const Model& model, const CollectionRec
         return model.ClassRevision();
       return model.StructureRevision();
     case CollectionKind::AttributeMap:
-      return model.StructureRevision();
+      return model.AttributeNamesRevision(record.scope);
   }
   return model.StructureRevision();
 }

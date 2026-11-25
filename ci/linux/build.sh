@@ -141,6 +141,7 @@ case "$step" in
     "${clean[@]}" "$venv/bin/python" "$root/ci/image_source_lifetime_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/nth_selector_performance_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/shadow_layout_cache_check.py"
+    "${clean[@]}" "$venv/bin/python" "$root/ci/attribute_map_scaling_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/pointer_hit_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/inline_alignment_check.py"
     "${clean[@]}" "$venv/bin/python" "$root/ci/iframe_monitor_check.py"

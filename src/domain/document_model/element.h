@@ -67,6 +67,7 @@ class Element : public Node {
     const auto typed = NextSvgViewBox({}, key, replacement, nullptr);
     RefreshSvgPoints({}, key, replacement, nullptr); ForgetSvgLength({}, key);
     attributes_.push_back(Attribute{key, std::move(replacement), DomString{}, DomString{}, key});
+    ++attribute_names_revision_;
     svg_view_box_ = typed;
   }
   void remove_attribute16(DomStringView name) {
@@ -75,6 +76,7 @@ class Element : public Node {
     if (it != attributes_.end()) {
       RemoveSvgViewBox(it->namespace_uri, it->local_name); RemoveSvgPoints(it->namespace_uri, it->local_name);
       ForgetSvgLength(it->namespace_uri, it->local_name); attributes_.erase(it);
+      ++attribute_names_revision_;
     }
   }
   // Namespaced attributes. The qualified name is stored as written (ASCII
@@ -111,6 +113,7 @@ class Element : public Node {
       if (attribute.namespace_uri == ns && attribute.local_name == stored_local) {
         const auto typed = NextSvgViewBox(ns, stored_local, replacement, &attribute.value);
         RefreshSvgPoints(ns, stored_local, replacement, &attribute.value); ForgetSvgLength(ns, stored_local);
+        if (attribute.name != stored_name) ++attribute_names_revision_;
         attribute.name = std::move(stored_name);
         attribute.prefix = std::move(stored_prefix);
         attribute.value.swap(replacement); svg_view_box_ = typed;
@@ -120,17 +123,22 @@ class Element : public Node {
     RefreshSvgPoints(ns, stored_local, replacement, nullptr); ForgetSvgLength(ns, stored_local);
     attributes_.push_back(Attribute{std::move(stored_name), std::move(replacement),
                                     std::move(ns), std::move(stored_prefix), std::move(stored_local)});
+    ++attribute_names_revision_;
     svg_view_box_ = typed;
   }
   void remove_attribute_ns16(DomStringView namespace_uri, DomStringView local) {
     for (auto it = attributes_.begin(); it != attributes_.end(); ++it)
       if (it->namespace_uri == namespace_uri && it->local_name == local) {
         RemoveSvgViewBox(it->namespace_uri, it->local_name); RemoveSvgPoints(it->namespace_uri, it->local_name);
-        ForgetSvgLength(it->namespace_uri, it->local_name); attributes_.erase(it); return;
+        ForgetSvgLength(it->namespace_uri, it->local_name); attributes_.erase(it);
+        ++attribute_names_revision_; return;
       }
   }
   const std::vector<Attribute>& attributes16() const noexcept { return attributes_; }
   size_t attribute_count() const noexcept { return attributes_.size(); }
+  // Only membership, order and qualified spelling affect a NamedNodeMap
+  // materialization. Its Attr wrappers read values live from this element.
+  uint64_t attribute_names_revision() const noexcept { return attribute_names_revision_; }
   // Public ruyijs control state is independent of attributes and resets on clone.
   bool option_selected() const {
     return selected_override_.value_or(get_attribute16(u"selected").has_value());
@@ -220,6 +228,7 @@ class Element : public Node {
   std::shared_ptr<const DomString> is_value_;
   NodeId shadow_root_ = 0;
   std::vector<Attribute> attributes_;
+  uint64_t attribute_names_revision_ = 1;
   std::optional<bool> selected_override_;
   InputCheckState input_check_;
   std::optional<DomString> input_value_;

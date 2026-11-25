@@ -159,13 +159,17 @@ Status Model::SetAttributeNS(NodeKey key, DomStringView namespace_uri, DomString
     const bool fold = namespace_uri.empty() && element.tag_name().folds_case();
     const DomString folded = fold ? domain::ascii_lower(local) : local;
     auto old = element.get_attribute_ns16(namespace_uri, folded);
+    const auto names_revision = element.attribute_names_revision();
     const auto previous_id = element.get_attribute16(u"id");
     State().budget(0,value.size() + (old ? 0 : qualified.size()),old ? old->size() : 0);
     element.set_attribute_ns16(namespace_uri,qualified,value);
     NoteIdChange(State().owner(key), key.node, previous_id, element.get_attribute16(u"id"));
     State().NoteAttributes(key, folded, namespace_uri, old ? &*old : nullptr);
     const bool connected = State().IsComposedConnected(key);
-    if (old && (DomStringView(*old) == value || (namespace_uri.empty() && folded == u"style"))) State().TouchStyle(connected);
+    // setAttributeNS can rename an existing attribute while keeping its value.
+    // Its qualified-name aliases must still refresh at the normal sync point.
+    if (old && names_revision == element.attribute_names_revision() &&
+        (DomStringView(*old) == value || (namespace_uri.empty() && folded == u"style"))) State().TouchStyle(connected);
     else if (namespace_uri.empty() && domain::ascii_lower(folded) == u"class") State().TouchClass(connected);
     else State().TouchAttribute(connected);
   });

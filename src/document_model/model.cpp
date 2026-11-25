@@ -117,6 +117,15 @@ bool Model::IsConnected(NodeKey key) const noexcept {
   return impl_ ? impl_->IsComposedConnected(key) : false;
 }
 uint64_t Model::ClassRevision() const noexcept { return impl_ ? impl_->classes : 0; }
+uint64_t Model::AttributeNamesRevision(NodeKey key) const noexcept {
+  if (!impl_) return 0;
+  const auto found = impl_->documents.find(key.document);
+  if (found == impl_->documents.end()) return 0;
+  const auto* element = found->second->get_element(key.node);
+  if (!element) return 0;
+  const bool html = element->tag_name().html() && found->second->mode() == domain::DocumentMode::Html;
+  return (element->attribute_names_revision() << 1) | uint64_t(html);
+}
 void Model::Rollback(DraftId draft) noexcept {
   if (!impl_) return;
   auto found = State().drafts.find(draft); if (found == State().drafts.end()) return;

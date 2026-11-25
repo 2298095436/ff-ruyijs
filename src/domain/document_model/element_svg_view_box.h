@@ -21,6 +21,7 @@ inline void Element::commit_svg_view_box(SvgViewBoxState value, DomString text) 
       attribute.value.swap(text); svg_view_box_ = value; return;
     }
   attributes_.push_back(Attribute{u"viewBox", std::move(text), {}, {}, u"viewBox"});
+  ++attribute_names_revision_;
   svg_view_box_ = value;
 }
 }

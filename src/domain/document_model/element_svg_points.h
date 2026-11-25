@@ -21,6 +21,7 @@ inline void Element::commit_svg_points(SvgPointsState state, DomString text) {
       attribute.value.swap(text); svg_points_ = std::move(state); return;
     }
   attributes_.push_back(Attribute{u"points", std::move(text), {}, {}, u"points"});
+  ++attribute_names_revision_;
   svg_points_ = std::move(state);
 }
 inline const geometry::SvgLengthValue* Element::svg_length(DomStringView local) const noexcept {
@@ -42,6 +43,7 @@ inline void Element::commit_svg_length(DomStringView local, geometry::SvgLengthV
       attribute.value.swap(text); svg_lengths_.swap(cached); return;
     }
   attributes_.push_back(Attribute{DomString(local), std::move(text), {}, {}, DomString(local)});
+  ++attribute_names_revision_;
   svg_lengths_.swap(cached);
 }
 }
