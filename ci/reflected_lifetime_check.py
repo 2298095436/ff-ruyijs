@@ -29,8 +29,8 @@ data:element.dataset.value,animated:svg.className.baseVal}})()''')
                             'svg': True, 'color': 'red', 'data': 'original',
                             'animated': 'old'}, observed
         for _ in range(4):
-            ctx.eval('''(()=>{for(let i=0;i<160;i++){
-const source=document.implementation.createHTMLDocument('transient');
+            ctx.eval('''(()=>{const source=document.implementation.createHTMLDocument('transient');
+for(let i=0;i<160;i++){
 const e=source.createElement('p');source.body.appendChild(e);
 e.style.opacity='0.5';e.dataset.value='temporary';
 document.adoptNode(e);document.body.appendChild(e);
